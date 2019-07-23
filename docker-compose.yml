@@ -1,0 +1,15 @@
+version: '3.7'
+services:
+  meets:
+    image: ego/meets:0.0.1
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Ids__ClientSecret=callers
+      - Ids__ClientId=callers
+    volumes:
+      - type: bind
+        source: ./appsettings.Docker.json
+        target: /app/appsettings.json
+        read_only: true
+    ports:
+      - "5010:80"
