@@ -1,0 +1,11 @@
+Implement redis-cache for application-cookies:
+Purpose is to
+- Avoid large cookies
+- Enable load balancing
+- Control sessions
+
+Redis example
+https://mikerussellnz.github.io/.NET-Core-Auth-Ticket-Redis/
+
+Proper set up with dependency injection
+https://www.red-gate.com/simple-talk/dotnet/net-development/using-auth-cookies-in-asp-net-core/

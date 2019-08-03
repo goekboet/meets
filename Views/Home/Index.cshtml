@@ -1,27 +1,15 @@
 ﻿@using Microsoft.AspNetCore.Authentication
+@using PublicCallers.Controllers;
+@using System;
+@model AppState;
 
 @{
     ViewData["Title"] = "Home Page";
+    var hasCreds = new Func<AppState, string>(s => s.HasCreds ? "true" : "false");
 }
 
-
-
-<h2>Claims</h2>
-
-<dl>
-    @foreach (var claim in User.Claims)
-    {
-        <dt>@claim.Type</dt>
-        <dd>@claim.Value</dd>
-    }
-</dl>
-
-<h2>Properties</h2>
-
-<dl>
-    @foreach (var prop in (await Context.AuthenticateAsync()).Properties.Items)
-    {
-        <dt>@prop.Key</dt>
-        <dd>@prop.Value</dd>
-    }
-</dl>
+<script>
+    let appstate = { hasCreds:@hasCreds(Model) };
+    console.log(appstate);
+    var app = Elm.Main.init({flags: appstate});
+</script>

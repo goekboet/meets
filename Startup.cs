@@ -1,4 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -60,6 +62,15 @@ namespace PublicCallers
                     options.SaveTokens = true;
                     options.Scope.Add("call");
                     options.Scope.Add("profile");
+
+                    options.Events = new OpenIdConnectEvents
+                    {
+                        OnRedirectToIdentityProvider = ctx =>
+                        {
+                            ctx.ProtocolMessage.SetParameter("state", "hello");
+                            return Task.CompletedTask;
+                        }
+                    };
                 });
         }
 

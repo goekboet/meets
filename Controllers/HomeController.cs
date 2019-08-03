@@ -7,18 +7,32 @@ using PublicCallers.Models;
 
 namespace PublicCallers.Controllers
 {
+    public class AppState
+    {
+        public bool HasCreds { get; set; }
+    }
+
     public class HomeController : Controller
     {
         public static HttpClient Client = new HttpClient();
-        [Authorize]
+
+
+
         public IActionResult Index()
         {
-            return View();
+            return View(new AppState { HasCreds = User.Identity.IsAuthenticated });
         }
 
-        public IActionResult Privacy()
+        public IActionResult Login()
         {
-            return View();
+            if (User.Identity.IsAuthenticated)
+            {
+                return Redirect("~/");
+            }
+            else
+            {
+                return Challenge();
+            }
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
