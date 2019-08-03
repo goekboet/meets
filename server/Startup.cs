@@ -84,7 +84,12 @@ namespace PublicCallers
             app.UseStaticFiles();
             app.UseCookiePolicy();
 
-            app.UseMvcWithDefaultRoute();
+            app.UseMvc(routes =>
+                routes.MapSpaFallbackRoute(
+                    name: "elm-app",
+                    defaults: new { controller = "Home", action = "Index" }
+                ));
+            
         }
     }
 }

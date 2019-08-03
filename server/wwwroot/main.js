@@ -5196,7 +5196,7 @@ var author$project$Main$update = F2(
 			case 'NeedsCreds':
 				return _Utils_Tuple2(
 					model,
-					elm$browser$Browser$Navigation$load('/home/login?~%2F'));
+					elm$browser$Browser$Navigation$load('/login?~%2F'));
 			default:
 				return _Utils_Tuple2(model, elm$core$Platform$Cmd$none);
 		}

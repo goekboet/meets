@@ -1,8 +1,11 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using PublicCallers.Models;
 
 namespace PublicCallers.Controllers
@@ -14,24 +17,37 @@ namespace PublicCallers.Controllers
 
     public class HomeController : Controller
     {
-        public static HttpClient Client = new HttpClient();
+        public ILogger<HomeController> Logger { get; }
 
-
+        public HomeController(
+            ILogger<HomeController> logger)
+        {
+            Logger = logger;
+        }
 
         public IActionResult Index()
         {
             return View(new AppState { HasCreds = User.Identity.IsAuthenticated });
         }
 
-        public IActionResult Login()
+        [HttpGet("/login")]
+        public IActionResult Login(string sparoute)
         {
+            if (sparoute == null)
+            { 
+                Logger.LogWarning("Received null spa-route. Will redirect to ~/.");
+                sparoute = "~/";
+            }
             if (User.Identity.IsAuthenticated)
             {
-                return Redirect("~/");
+                return Redirect(sparoute);
             }
             else
             {
-                return Challenge();
+                return Challenge(new AuthenticationProperties
+                {
+                    RedirectUri = sparoute
+                });
             }
         }
 

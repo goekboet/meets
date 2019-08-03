@@ -2,3 +2,5 @@ bin
 obj
 Properties
 discovery.json
+.ionide
+.vscode

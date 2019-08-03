@@ -68,7 +68,7 @@ update msg model =
       )
 
     NeedsCreds ->
-      ( model, Nav.load "/home/login?~%2F")
+      ( model, Nav.load "/login?~%2F")
 
     Book ->
       ( model, Cmd.none )
