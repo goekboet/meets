@@ -30,7 +30,7 @@ namespace PublicCallers.Controllers
             {
                 var refDate = new DateTimeOffset(new DateTime(2019, 7, 29, 10, 0, 0));
                 var days = Enumerable.Range(0, 7)
-                    .Select(x => refDate.AddHours(0));
+                    .Select(x => refDate.AddHours(x));
 
                 var week = Enumerable.Range(0, 7)
                     .SelectMany(x => days.Select(d => d.AddDays(x)));

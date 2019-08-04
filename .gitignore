@@ -4,3 +4,4 @@ Properties
 discovery.json
 .ionide
 .vscode
+**/elm-stuff
