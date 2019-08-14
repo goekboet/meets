@@ -1,5 +1,7 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Principal;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,6 +15,9 @@ namespace PublicCallers
 {
     public class Startup
     {
+        public static readonly string CookieScheme = "Cookies";
+        public static readonly string OpenIdScheme = "oidc";
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -50,11 +55,14 @@ namespace PublicCallers
 
             services.AddAuthentication(options =>
                 {
-                    options.DefaultScheme = "Cookies";
-                    options.DefaultChallengeScheme = "oidc";
+                    options.DefaultScheme = CookieScheme;
+                    options.DefaultChallengeScheme = OpenIdScheme;
                 })
-                .AddCookie("Cookies")
-                .AddOpenIdConnect("oidc", options =>
+                .AddCookie("Cookies", options => 
+                {
+                    options.Cookie.Name = "ego.meets";
+                })
+                .AddOpenIdConnect(OpenIdScheme, options =>
                 {
                     Configuration.GetSection("Ids").Bind(options);
                     options.ResponseType = "code";
@@ -62,15 +70,6 @@ namespace PublicCallers
                     options.SaveTokens = true;
                     options.Scope.Add("call");
                     options.Scope.Add("profile");
-
-                    options.Events = new OpenIdConnectEvents
-                    {
-                        OnRedirectToIdentityProvider = ctx =>
-                        {
-                            ctx.ProtocolMessage.SetParameter("state", "hello");
-                            return Task.CompletedTask;
-                        }
-                    };
                 });
         }
 

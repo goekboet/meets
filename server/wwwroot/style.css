@@ -3,104 +3,209 @@ body {
     padding: 0;
 }
 
-#layout {
-    display: grid;
-    grid-template-columns: 20em auto;
-    grid-template-rows: 5em auto;
-    grid-template-areas: 
-        "header header"
-        "side content"
+a {
+    text-decoration: none;
+    border: none;
 }
 
-#head {
+a:visited {
+    color: inherit;
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 32vw auto;
+    grid-template-rows: 21vh auto;
+    grid-template-areas: "homelink header" "side content";
+  }
+
+/* Homelink */
+
+.homelink {
+    grid-area: homelink;
+    background-color: darkcyan;
+    display: grid;
+    grid-template: 1fr / 1fr;
+    align-items: end;
+    justify-items: start;
+    padding-left: 3vw;
+}
+
+  .homelink a {
+    margin: 0;
+    padding: 0;
+    font-size: 4em;
+    margin-bottom: 1vh;
+    font-family: sans-serif;
+    color: burlywood;
+    font-weight: bold;
+  }
+
+.header {
     grid-area: header;
-    display: flex;
-    flex-direction: row;
-    align-items: baseline;
-    justify-content: flex-start;
     background-color: darkcyan;
 }
 
-#head h1 {
-    padding: 0;
-    margin: 0;
+.header form {
+    display: grid;
+    grid-template: 1fr / 1fr;
+    justify-items: end;
+    align-items: end;
     height: 100%;
-    font-size: 4em;
+    padding-left: 3vw;
+    padding-right: 3vw;
+}
+
+/* Logouttrigger */
+
+.header form input {
+    margin-bottom: 1vh;
+    background: none;
     font-family: sans-serif;
     color: burlywood;
-    flex-grow: 0.75;
-    padding-left: 0.5em;
+    font-weight: bold;
+    font-size: 1em;
+    border: none;
 }
 
-#head i {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    font-size: 1.75em;
-    font-style: normal;
-    font-family: sans-serif;
-    color: darkgray;
-}
-
-#side {
+.side {
     grid-area: side;
     margin: 0;
-    padding-left: 2em;
+    padding-left: 3vw;
+    padding-right: 3vw;
     background-color: darkgray;
 }
 
-.schedules-list .selected {
-    border-color: darkslategray;
-    border-left: none;
-    border-right: none;
-}
-
-
-
-#side h2 {
+.side h1 {
     font-family: sans-serif;
-    padding-top: 1em;
-    padding-bottom: 0.5em;
+    padding-top: 0.5em;
+    padding-bottom: 0;
     margin-top: 0;
     margin-bottom: 0;
     color: darkslategray;
+}
 
+/* myBookings */
+
+.myBookings {
+    display: grid;
+    grid-template: 1fr / 1fr 1fr;
+    background: darkslategray;
+    color: darkgray;
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-bottom: 0.5em;
+    padding-top: 0.5em;
+    border-radius: 20px;
+    font-family: sans-serif;
+    margin-top: 3vh;
+    margin-bottom: 0;
+}
+
+.myBookings dd {
+    justify-self: end;
+}
+
+.login-to-book {
+    display: grid;
+    grid-template: 1fr / 1fr 1fr;
+    background: darkslategray;
+    color: darkgray;
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-bottom: 0.5em;
+    padding-top: 0.5em;
+    border-radius: 20px;
+    font-family: sans-serif;
+    margin-top: 3vh;
+}
+
+/* Schdeuleslist */
+.selected {
+    list-style: disc;
+    text-decoration: darkslategray;
 }
 
 .schedules-list {
     list-style: none;
     text-decoration: none;
-    padding:0;
+    padding: 0;
     margin: 0;
-
 }
 
 .schedules-list li {
+    padding-bottom: 0.5em;
+    margin-left: 1em;
+}
+
+.schedules-list li a {
     font-family: sans-serif;
-    margin-bottom: 0.5em;
-    margin-top: 0.5em;
-    margin-left: 0.5em;
+    margin: 0;
     padding:0;
+    border:0;
+    display: block;
     color: darkslategray;
-    border-color: darkgray;
-    border-style: solid;
 }
 
 .schedules-list li:hover {
-    background-color: darkslategray;
-    color: darkgrey;
-    border-color: darkslategray;
-    
+    list-style: disc;
+    text-decoration: darkslategray;
 }
 
-#content {
+/* Messagerecord */
+
+.messagerecord {
+    padding:0;
+    margin:0;
+}
+
+.messagerecord li {
+    list-style: none;
+    margin-left: 1em;
+    padding: 0;
+    display: grid;
+    grid-template: 1fr / auto auto;
+    font-family: sans-serif;
+    color: darkslategray;
+}
+
+.messagerecord dl {
+    padding-bottom: 1em;
+    margin: 0;
+}
+
+.messagerecord dt {
+    padding:0;
+    margin:0;
+    display: block;
+}
+
+.messagerecord dd {
+    padding:0;
+    margin:0;
+    display:block;
+}
+
+.messagerecord button {
+    justify-self: end;
+    align-self: start;
+    background-color: darkslategray;
+    height: 15px;
+    width: 15px;
+    border: none;
+    border-radius: 100%;
+}
+
+
+
+.content {
     grid-area: content;
     background-color: darkslategray;
-    padding-left: 2em;
-    padding-right: 2em;
+    padding-left: 3vw;
+    padding-right: 3vw;
 }
 
-#content h2 {
+.content h2 {
     font-family: sans-serif;
     padding-top: 1em;
     padding-bottom: 0.5em;
@@ -109,30 +214,53 @@ body {
     color: darkgray;
 }
 
-#content ul {
+.content ul {
     margin-left: 0.5em;
     margin:0;
     padding: 0;
     list-style: none;
 }
 
-#content li {
+.meetitem {
     background-color: darkgray;
-    display: grid;
-    grid-template-columns: 4fr 6fr;
-    padding:1em;
+    padding:0;
     border-bottom: solid;
     border-color: darkslategray;
 }
 
-#content dl {
+.meetitem a {
+    display: grid;
+    grid-template-columns: 8fr 2fr;
+}
+
+.meetitem button {
+    padding: 1em;
+    margin: 0;
+    background-color: darkcyan;
+    color: burlywood;
+    font-family: sans-serif;
+    font-size: 1.5em;
+    font-weight: bold;
+    border: none;
+    visibility: hidden;
+}
+
+.meetitem:hover button {
+    visibility: visible; 
+}
+
+button.focus {
+    visibility: visible;
+}
+
+.meetdata {
     display: grid;
     grid-template-columns: 5em auto;
     row-gap: 0.5em;
     font-family: sans-serif;
     color: darkslategrey;
     margin: 0;
-    padding:0;
+    padding:1em;
 }
 
 #content dd {

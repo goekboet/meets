@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "server", "server\server.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tests", "tests\tests.csproj", "{683D82BB-60BA-4772-8604-C9107493D292}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "timeutil", "timeutil\timeutil.csproj", "{44386AEE-A84C-4214-B058-6B05141411FA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,5 +46,17 @@ Global
 		{683D82BB-60BA-4772-8604-C9107493D292}.Release|x64.Build.0 = Release|Any CPU
 		{683D82BB-60BA-4772-8604-C9107493D292}.Release|x86.ActiveCfg = Release|Any CPU
 		{683D82BB-60BA-4772-8604-C9107493D292}.Release|x86.Build.0 = Release|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Debug|x64.Build.0 = Debug|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Debug|x86.Build.0 = Debug|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Release|x64.ActiveCfg = Release|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Release|x64.Build.0 = Release|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Release|x86.ActiveCfg = Release|Any CPU
+		{44386AEE-A84C-4214-B058-6B05141411FA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

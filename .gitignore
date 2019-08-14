@@ -5,3 +5,5 @@ discovery.json
 .ionide
 .vscode
 **/elm-stuff
+**/main.js
+**/main.min.js

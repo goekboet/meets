@@ -34,9 +34,9 @@ namespace PublicCallers.Controllers
         public IActionResult Login(string sparoute)
         {
             if (sparoute == null)
-            { 
+            {
                 Logger.LogWarning("Received null spa-route. Will redirect to ~/.");
-                sparoute = "~/";
+                sparoute = "";
             }
             if (User.Identity.IsAuthenticated)
             {
@@ -50,6 +50,30 @@ namespace PublicCallers.Controllers
                 });
             }
         }
+
+        [HttpPost("/logout")]
+        public IActionResult Logout(string sparoute)
+        {
+            if (sparoute == null)
+            {
+                Logger.LogWarning("Received null spa-route. Will redirect to ~/.");
+                sparoute = "";
+            }
+            if (!User.Identity.IsAuthenticated)
+            {
+                return Redirect(sparoute);
+            }
+
+            return new SignOutResult(new[]
+                {
+                    Startup.CookieScheme,
+                    Startup.OpenIdScheme
+                }, new AuthenticationProperties
+                {
+                    RedirectUri = sparoute
+                });
+        }
+
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
