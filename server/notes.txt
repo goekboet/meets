@@ -9,3 +9,19 @@ https://mikerussellnz.github.io/.NET-Core-Auth-Ticket-Redis/
 
 Proper set up with dependency injection
 https://www.red-gate.com/simple-talk/dotnet/net-development/using-auth-cookies-in-asp-net-core/
+
+
+- Implement paging by timewindow
+
+the call to host/{hostname}/meets can contain a query-string in the format:
+
+(:- default)
+from={unix-timestamp :- now}&for={minutes :- 60}
+
+this returns any meets for that host that begins within the time that falls within the window.
+
+we want to use this to implement a weekly calendar in the ISO-format on the client to page through meets
+by week-number.
+
+- get the unix timestamp of the start of an arbitrary ISOWeek
+- get the time in minutes to start of next week.
