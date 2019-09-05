@@ -244,7 +244,7 @@ namespace PublicCallers.Scheduling
             TimeZoneInfo tz)
         {
             var (y, m, d) = ToGregorian(s, tz);
-            var date = new DateTime(y,m,d);
+            var date = new DateTime(y,m,d, s.Hour, s.Minute, 0);
 
             return new DateTimeOffset(
                 date,

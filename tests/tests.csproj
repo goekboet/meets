@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\server\server.csproj" />
+    <ProjectReference Include="..\scheduling\scheduling.csproj" />
   </ItemGroup>
 
 </Project>
