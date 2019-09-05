@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sut = PublicCallers;
 
-namespace tests
+namespace Tests
 {
     [TestClass]
     public class EndpointTests
