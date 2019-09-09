@@ -9,10 +9,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tests", "tests\tests.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "timeutil", "timeutil\timeutil.csproj", "{44386AEE-A84C-4214-B058-6B05141411FA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "scheduling", "scheduling\scheduling.csproj", "{736BCA07-96A8-4EB5-84FA-B93E392F3897}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "makeMeets", "makeMeets\makeMeets.csproj", "{E76DB71E-6F8F-448F-AF43-2052CAE48AFD}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
