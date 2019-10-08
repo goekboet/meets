@@ -1,5 +1,4 @@
-﻿@using Microsoft.AspNetCore.Authentication
-@using PublicCallers.Controllers;
+﻿@using PublicCallers.Controllers;
 @using System;
 @model AppState;
 
@@ -9,7 +8,15 @@
 }
 
 <script>
-    let appstate = { hasCreds:@hasCreds(Model) };
-    console.log(appstate);
+    let appstate = 
+        { 
+            hasCreds:@hasCreds(Model),
+            now: Date.now()
+        };
     var app = Elm.Main.init({flags: appstate});
+    app.ports.getTimesWindow.subscribe(v => {
+        console.log("computing timewindow");
+        app.ports.gotTimesWindow.send(toWindow(v));
+        
+    })
 </script>

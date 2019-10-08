@@ -7,3 +7,5 @@ discovery.json
 **/elm-stuff
 **/main.js
 **/main.min.js
+**/node_modules
+**/wwwroot/

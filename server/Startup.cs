@@ -1,8 +1,5 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
-using System.Security.Principal;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -68,9 +65,16 @@ namespace PublicCallers
                     options.ResponseType = "code";
                     options.GetClaimsFromUserInfoEndpoint = true;
                     options.SaveTokens = true;
-                    options.Scope.Add("call");
+                    options.Scope.Add("bookings");
                     options.Scope.Add("profile");
                 });
+
+            services.AddHttpClient("broker", opts =>
+            {
+                Configuration.GetSection("Broker").Bind(opts);
+                opts.DefaultRequestHeaders.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue("application/json"));
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
