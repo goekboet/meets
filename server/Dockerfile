@@ -13,4 +13,4 @@ RUN dotnet publish -c Release -o out
 FROM ego/aspnet:2.2
 WORKDIR /app
 COPY --from=build-env /app/out .
-ENTRYPOINT ["dotnet", "meets.dll"]
+ENTRYPOINT ["dotnet", "server.dll"]
