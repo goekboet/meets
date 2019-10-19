@@ -157,30 +157,41 @@ decodeBookingRequest = Decode.map3 BookingRequest
   (Decode.field "start" Decode.int)
   (Decode.field "timeId" Decode.string)
 
+type SessionState
+  = Fresh
+  | Stale
+  | None
+
+isSignedIn : SessionState -> Bool
+isSignedIn s = case s of
+  Fresh -> True
+  _     -> False
+
 -- MODEL
 
 type alias Model =
   { key : Nav.Key
   , route : Route
-  , hasCreds: Bool
-  , timezone: Maybe T.Zone
-  , schedules: Schedules
-  , schedule: ScheduleResult
-  , confirmedBookings: List BookingConfirm
-  , myBookings: BookingsRsult 
+  , sessionState: SessionState
   , initTime : Posix
+  , timezone: Maybe T.Zone
+  , hostsResult: HostResult
+  , timesResult: TimesResult
+  , myBookingsResult: BookingsRsult 
+  , notifications: List BookingConfirm
+  
   }
 
-type Schedules =
+type HostResult =
   Fetching
   | Fetched (List Host)
   | Errored String
 
-type ScheduleResult =
-  NoSchedule
-  | FetchingSchedule
-  | FetchedSchedule (List Time)
-  | ErroredSchedule String
+type TimesResult =
+  UnFetched
+  | FetchingTimes
+  | FetchedTimes (List Time)
+  | ErroredTimes String
 
 type alias Reason = (String, Posix)
 type alias ConfirmedMeet = (String, Posix)
@@ -210,12 +221,12 @@ init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   ( { key = key
     , route = toRoute url
-    , hasCreds = flags.hasCreds
+    , sessionState = if flags.hasCreds then Fresh else None
     , timezone = Nothing
-    , schedules = Fetching
-    , schedule = NoSchedule 
-    , confirmedBookings = []
-    , myBookings = NotAvailiable
+    , hostsResult = Fetching
+    , timesResult = UnFetched 
+    , notifications = []
+    , myBookingsResult = NotAvailiable
     , initTime = T.millisToPosix flags.now
     }
   , Cmd.batch 
@@ -238,9 +249,9 @@ type Msg
   = LinkClicked Browser.UrlRequest
   | UrlChanged Url.Url
   | AgentZone T.Zone
-  | FetchedSchedules (Result Http.Error (List Host))
+  | HostsFetched (Result Http.Error (List Host))
   | GotTimesWindow (Result Decode.Error (Int, Int))
-  | FetchedTimes (Result Http.Error (List Time))
+  | TimesFetched (Result Http.Error (List Time))
   | NeedsCreds 
   | Book BookingRequest
   | MeetBooked (Result Http.Error BookingRequest)
@@ -284,7 +295,7 @@ update msg model =
         Err e -> 
           (
             { model 
-            | schedule = ErroredSchedule (Decode.errorToString e)
+            | timesResult = ErroredTimes (Decode.errorToString e)
             }
           , Cmd.none
           )
@@ -292,21 +303,32 @@ update msg model =
           ( model
           , callTimes wo model.route
           )
-
-    FetchedSchedules (Err e) ->
-      ( { model | schedule = ErroredSchedule <| toMsg e}
+    HostsFetched (Err (Http.BadStatus 401) ) ->
+      ( { model | sessionState = Stale }
       , Cmd.none
       )
 
-    FetchedSchedules (Ok ss) ->
+    HostsFetched (Err e) ->
+      ( { model | timesResult = ErroredTimes <| toMsg e}
+      , Cmd.none
+      )
+
+    HostsFetched (Ok ss) ->
       ( receiveSchedules model ss
       , Cmd.none
       )
 
-    FetchedTimes (Err e) ->
-      ( { model | schedule = ErroredSchedule <| toMsg e }, Cmd.none )
+    TimesFetched (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      )
 
-    FetchedTimes (Ok res) ->
+    TimesFetched (Err e) ->
+      ( { model | timesResult = ErroredTimes <| toMsg e }
+      , Cmd.none )
+    
+
+    TimesFetched (Ok res) ->
       ( receiveSchedule model res, Cmd.none )
     
     NeedsCreds ->
@@ -320,11 +342,21 @@ update msg model =
       , Cmd.batch [ callBookings, getTimesWindowFromRoute model.route ] 
       ) 
 
+    MeetBooked (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      ) 
+
     MeetBooked (Err e) ->
       ( model, addDecline (toMsg e) ) 
 
     UnBook r ->
       (model, callUnbook r )
+
+    TimeUnbooked (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      )
 
     TimeUnbooked (Err e) ->
       (model, addDecline (toMsg e) )
@@ -334,7 +366,7 @@ update msg model =
 
     MeetConfirmed c ->
       ( { model 
-        | confirmedBookings = c :: model.confirmedBookings 
+        | notifications = c :: model.notifications 
         }
       , getTimesWindowFromRoute model.route)        
     
@@ -343,9 +375,14 @@ update msg model =
 
     GotBookings (Ok bs) ->
       ( { model 
-        | myBookings = BookingSuccess bs
+        | myBookingsResult = BookingSuccess bs
         }
       , Cmd.none 
+      )
+
+    GotBookings (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
       )
 
     GotBookings (Err e) ->
@@ -361,7 +398,7 @@ hostUrl = UrlB.crossOrigin "https://broker.ego" ["hosts"] []
 
 receiveSchedule : Model -> (List Time) -> Model
 receiveSchedule m s =
-  { m | schedule = FetchedSchedule s }
+  { m | timesResult = FetchedTimes s }
 
 loadHosts : Route -> Cmd Msg
 loadHosts  r =
@@ -369,11 +406,11 @@ loadHosts  r =
     NotFound -> Cmd.none
     _        -> Http.get
       { url = hostUrl
-      , expect = Http.expectJson FetchedSchedules decodeHosts }
+      , expect = Http.expectJson HostsFetched decodeHosts }
 
 receiveSchedules : Model -> (List Host) -> Model
 receiveSchedules m ss =
-  { m | schedules = Fetched ss }
+  { m | hostsResult = Fetched ss }
 
 -- Bookings
 
@@ -443,7 +480,7 @@ discardConfirmation t m =
             Affirmative (_, s) -> t == s
             Decline (_, s) -> t == s
   in
-   { m | confirmedBookings = List.filter (not << match) m.confirmedBookings }
+   { m | notifications = List.filter (not << match) m.notifications }
 
 
 -- Meets
@@ -457,7 +494,7 @@ callTimes (from, to) r =
         [ UrlB.int "from" from
         , UrlB.int "to" to
         ]
-      , expect = Http.expectJson FetchedTimes decodeTimes
+      , expect = Http.expectJson TimesFetched decodeTimes
       }
     _ -> Cmd.none
 
@@ -516,8 +553,8 @@ view model =
                [ myBookings model
                , h1 [] [ text "Hosts" ]
                , hosts model
-               , if List.isEmpty model.confirmedBookings then text "" else h1 [] [ text "Confirmed" ] 
-               , Maybe.map (messageRecord model.confirmedBookings) model.timezone
+               , if List.isEmpty model.notifications then text "" else h1 [] [ text "Confirmed" ] 
+               , Maybe.map (messageRecord model.notifications) model.timezone
                    |> Maybe.withDefault (text "")
                ]
              , div [ class "content" ] (content model)
@@ -537,7 +574,7 @@ homelink = a [  href "/"
 
 logoutTrigger : Model -> Html Msg
 logoutTrigger m =
-  if m.hasCreds
+  if isSignedIn m.sessionState
   then Html.form [ action (logoutUrl m), method "post" ] [ input [ type_ "submit", value "Logout" ] []]
   else text ""
 
@@ -546,7 +583,7 @@ logoutTrigger m =
 -- myBookings
 
 myBookings : Model -> Html Msg
-myBookings m = if m.hasCreds
+myBookings m = if isSignedIn m.sessionState
         then bookingsCount m 
         else a [ onClick <| NeedsCreds 
                , class "login-to-book"] [ text "Sign in" ] 
@@ -562,7 +599,7 @@ bookingsCount m =
     [ dl 
       [ class "myBookings" ] 
       [ dt [] [ text "booked" ]
-      , dd [] [ bookigCountView m.myBookings ]
+      , dd [] [ bookigCountView m.myBookingsResult ]
       ]
     ] 
 
@@ -613,7 +650,7 @@ lastWeek c =
 
 stepWeekPointer : Route -> String -> String
 stepWeekPointer r w = case r of
-  ScheduleRoute s _ -> UrlB.absolute [ s ] [ UrlB.string "week" w ]
+  ScheduleRoute s _ -> UrlB.absolute [ "hosts", s ] [ UrlB.string "week" w ]
   HomeRoute _       -> UrlB.absolute [] [ UrlB.string "week" w ]
   _                 -> UrlB.absolute [] []
 
@@ -623,7 +660,7 @@ stepWeekPointer r w = case r of
 
 hosts : Model -> Html Msg
 hosts m =
-  case m.schedules of
+  case m.hostsResult of
     Fetching   -> text ""
     Fetched ss -> ul [ class "schedules-list" ] (List.map (host m) ss) 
     Errored e  -> i [] [text e] 
@@ -685,7 +722,7 @@ myBookingsListing m =
 
 bookingsView : Model -> Html Msg
 bookingsView m =
-  case (m.timezone, m.hasCreds, m.myBookings) of
+  case (m.timezone, isSignedIn m.sessionState, m.myBookingsResult) of
     (Just tz, True, BookingSuccess ts) ->
       ul [] (List.map
         (\b -> 
@@ -701,7 +738,7 @@ bookingsView m =
             , unBookBtn b.start
             ]
         ) ts)
-    (_, False, _) -> p [] [ text "Sign in to view bookings"] 
+    (_, False, _) -> p [] [ text "Your session has become stale. You need to sign in again."] 
     _ -> text ""
 
 unBookBtn : Int -> Html Msg
@@ -734,17 +771,17 @@ weekPointer m =
 
 times : Model -> List (Html Msg)
 times m =
-  case m.schedule of
-    NoSchedule -> [ h2 [] [ text "no schedule selected"] ]
-    FetchingSchedule -> [ h2 [] [ text "..."] ]
-    FetchedSchedule s -> timesView s m
-    ErroredSchedule e -> [ h2 [] [ text e ] ]
+  case m.timesResult of
+    UnFetched -> [ h2 [] [ text "no host selected"] ]
+    FetchingTimes -> [ h2 [] [ text "..."] ]
+    FetchedTimes s -> timesView s m
+    ErroredTimes e -> [ h2 [] [ text e ] ]
 
 timesView : (List Time) -> Model -> List (Html Msg) 
 timesView ts m =
   case (m.timezone, m.route) of
     (Just tz, ScheduleRoute _ _) -> 
-      [ ul [] (List.map (timeView tz m.hasCreds) ts) 
+      [ ul [] (List.map (timeView tz <| isSignedIn m.sessionState) ts) 
       ]
     _                                 -> [ p [] [ text "No timezone." ] ]
 

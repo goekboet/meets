@@ -9,12 +9,12 @@ namespace PublicCallers.Controllers
         public bool HasCreds { get; set; }
     }
 
-    public class HomeController : Controller
+    public class SpaController : Controller
     {
-        public ILogger<HomeController> Logger { get; }
+        public ILogger<SpaController> Logger { get; }
 
-        public HomeController(
-            ILogger<HomeController> logger)
+        public SpaController(
+            ILogger<SpaController> logger)
         {
             Logger = logger;
         }

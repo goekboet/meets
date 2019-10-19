@@ -1,9 +1,8 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -12,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace PublicCallers.Controllers
@@ -38,31 +38,52 @@ namespace PublicCallers.Controllers
     {
         private readonly IHttpClientFactory _clientFactory;
         private HttpClient Client => _clientFactory.CreateClient("broker");
+        private readonly ILogger<ApiController> _log;
+
+        // private string UserId => User.Claims
+        //         .FirstOrDefault(x => x.Type == "sub")
+        //         .Value;
 
         public ApiController(
-            IHttpClientFactory clientFactory
+            IHttpClientFactory clientFactory,
+            ILogger<ApiController> log
         )
         {
             _clientFactory = clientFactory;
+            _log = log;
         }
 
         [Authorize]
         [HttpGet("api/bookings")]
-        public async Task<ActionResult> GetBookings()
+        public async Task<ActionResult<Stream>> GetBookings()
         {
             var t = await HttpContext.GetTokenAsync("access_token");
+            if (t == null)
+            {
+                _log.LogInformation("Found no accesstoken for {User}", User.Id() ?? "n/a");
+                return Unauthorized();
+            }
 
             var req = new HttpRequestMessage
             {
                 Method = HttpMethod.Get,
                 RequestUri = new Uri("bookings", UriKind.Relative)
             };
-            req.SetBearerToken(t);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
 
             var res = await Client.SendAsync(req);
+            if (res.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _log.LogInformation("Accesstoken was rejected for {User}.", User.Id() ?? "n/a");
+                return Unauthorized();
+            }
+            else
+            {
+                res.EnsureSuccessStatusCode();
+            }
             Response.StatusCode = (int)res.StatusCode;
 
-            return File(await res.Content.ReadAsStreamAsync(), "application/json");
+            return await res.Content.ReadAsStreamAsync();
         }
 
         [Authorize]
@@ -73,6 +94,11 @@ namespace PublicCallers.Controllers
             if (ModelState.IsValid)
             {
                 var t = await HttpContext.GetTokenAsync("access_token");
+                if (t == null)
+                {
+                    _log.LogInformation("Found no accesstoken for {User}", User.Id() ?? "n/a");
+                    return Unauthorized();
+                }
 
                 var req = new HttpRequestMessage
                 {
@@ -84,10 +110,18 @@ namespace PublicCallers.Controllers
                         "application/json"
                     )
                 };
-                req.SetBearerToken(t);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
 
                 var res = await Client.SendAsync(req);
-                res.EnsureSuccessStatusCode();
+                if (res.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _log.LogInformation("Accesstoken was rejected for {User}.", User.Id() ?? "n/a");
+                    return Unauthorized();
+                }
+                else
+                {
+                    res.EnsureSuccessStatusCode();
+                }
 
                 return Created($"api/bookings", b);
             }
@@ -103,16 +137,29 @@ namespace PublicCallers.Controllers
             long start)
         {
             var t = await HttpContext.GetTokenAsync("access_token");
+            if (t == null)
+            {
+                _log.LogInformation("Found no accesstoken for {User}", User.Id() ?? "n/a");
+                return Unauthorized();
+            }
 
             var req = new HttpRequestMessage
             {
                 Method = HttpMethod.Delete,
                 RequestUri = new Uri($"bookings/{start}", UriKind.Relative),
             };
-            req.SetBearerToken(t);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
 
             var res = await Client.SendAsync(req);
-            res.EnsureSuccessStatusCode();
+            if (res.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _log.LogInformation("Accesstoken was rejected for {User}.", User.Id() ?? "n/a");
+                return Unauthorized();
+            }
+            else
+            {
+                res.EnsureSuccessStatusCode();
+            }
 
             return NoContent();
         }

@@ -1,10 +1,8 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -46,7 +44,7 @@ namespace PublicCallers
             });
 
 
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+            services.AddControllersWithViews();
 
             JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
@@ -68,7 +66,7 @@ namespace PublicCallers
                     options.Scope.Add("bookings");
                     options.Scope.Add("profile");
                 });
-
+            
             services.AddHttpClient("broker", opts =>
             {
                 Configuration.GetSection("Broker").Bind(opts);
@@ -78,21 +76,23 @@ namespace PublicCallers
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app)
         {
             app.UseForwardedHeaders();
+            app.UseStaticFiles();
+            app.UseRouting();
             
             app.UseDeveloperExceptionPage();
             app.UseAuthentication();
-            app.UseStaticFiles();
+            app.UseAuthorization();
             app.UseCookiePolicy();
 
-            app.UseMvc(routes =>
-                routes.MapSpaFallbackRoute(
-                    name: "elm-app",
-                    defaults: new { controller = "Home", action = "Index" }
-                ));
-            
+            app.UseEndpoints(endpoints => {
+                endpoints.MapFallbackToController(
+                    action: "Index",
+                    controller: "Spa"
+                );
+            });
         }
     }
 }

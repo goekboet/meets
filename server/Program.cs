@@ -1,7 +1,7 @@
 ﻿using System;
-using Microsoft.AspNetCore;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.IdentityModel.Logging;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Formatting.Elasticsearch;
 
@@ -11,7 +11,7 @@ namespace PublicCallers
     {
         public static void Main(string[] args)
         {
-            CreateWebHostBuilder(args).Build().Run();
+            CreateHostBuilder(args).Build().Run();
         }
 
         public static LoggerConfiguration SwitchLogger(
@@ -33,8 +33,11 @@ namespace PublicCallers
             return logger;
         }
 
-        public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-            WebHost.CreateDefaultBuilder(args)
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .ConfigureWebHostDefaults(webBuilder =>
+        {
+            webBuilder
                 .UseStartup<Startup>()
                 .UseSerilog((context, configuration) =>
                     {
@@ -42,5 +45,7 @@ namespace PublicCallers
                         var key = context.Configuration["Serilog:Configuration"];
                         SwitchLogger(key, configuration);
                     });
+        });
+                
     }
 }
