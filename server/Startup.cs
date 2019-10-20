@@ -1,12 +1,19 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Net.Http.Headers;
+using System.Security.Cryptography.X509Certificates;
+using IdentityModel;
+using Meets.RefreshTokenHandling;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 
-namespace PublicCallers
+namespace Meets
 {
     public class Startup
     {
@@ -16,6 +23,7 @@ namespace PublicCallers
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
+            JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
         }
 
         public IConfiguration Configuration { get; }
@@ -46,7 +54,7 @@ namespace PublicCallers
 
             services.AddControllersWithViews();
 
-            JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+            
 
             services.AddAuthentication(options =>
                 {
@@ -57,6 +65,7 @@ namespace PublicCallers
                 {
                     options.Cookie.Name = "ego.meets";
                 })
+                .AddAutomaticTokenManagement()
                 .AddOpenIdConnect(OpenIdScheme, options =>
                 {
                     Configuration.GetSection("Ids").Bind(options);
@@ -65,6 +74,15 @@ namespace PublicCallers
                     options.SaveTokens = true;
                     options.Scope.Add("bookings");
                     options.Scope.Add("profile");
+                    options.Scope.Add("offline_access");
+
+                    options.ClaimActions.MapAllExcept("iss", "nbf", "exp", "aud", "nonce", "iat", "c_hash");
+
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        NameClaimType = JwtClaimTypes.Name,
+                        RoleClaimType = JwtClaimTypes.Role,
+                    };
                 });
             
             services.AddHttpClient("broker", opts =>
@@ -73,6 +91,20 @@ namespace PublicCallers
                 opts.DefaultRequestHeaders.Accept.Add(
                     new MediaTypeWithQualityHeaderValue("application/json"));
             });
+
+            if (Configuration["Dataprotection:Type"] == "Docker")
+            {
+                services.AddDataProtection()
+                    .PersistKeysToFileSystem(
+                        new DirectoryInfo(Configuration["Dataprotection:KeyPath"])
+                    )
+                    .ProtectKeysWithCertificate(
+                        new X509Certificate2(
+                            Configuration["Dataprotection:CertPath"],
+                            Configuration["Dataprotection:CertPass"]
+                        )
+                    );
+            }
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Sut = PublicCallers;
+using Sut = Meets;
 
 namespace Tests
 {

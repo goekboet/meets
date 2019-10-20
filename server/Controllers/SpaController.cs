@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace PublicCallers.Controllers
+namespace Meets.Controllers
 {
     public class AppState
     {

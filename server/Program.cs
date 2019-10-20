@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Formatting.Elasticsearch;
 
-namespace PublicCallers
+namespace Meets
 {
     public class Program
     {
