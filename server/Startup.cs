@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 using IdentityModel;
 using Meets.RefreshTokenHandling;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -64,6 +65,7 @@ namespace Meets
                 .AddCookie("Cookies", options => 
                 {
                     options.Cookie.Name = "ego.meets";
+                    options.AccessDeniedPath = new PathString("/");
                 })
                 .AddAutomaticTokenManagement()
                 .AddOpenIdConnect(OpenIdScheme, options =>
@@ -83,6 +85,8 @@ namespace Meets
                         NameClaimType = JwtClaimTypes.Name,
                         RoleClaimType = JwtClaimTypes.Role,
                     };
+
+                    options.AccessDeniedPath = new PathString("/");
                 });
             
             services.AddHttpClient("broker", opts =>
