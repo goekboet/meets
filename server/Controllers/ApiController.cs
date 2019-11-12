@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Meets.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -35,20 +36,15 @@ namespace Meets.Controllers
     [ApiController]
     public class ApiController : ControllerBase
     {
-        private readonly IHttpClientFactory _clientFactory;
-        private HttpClient Client => _clientFactory.CreateClient("broker");
+        private readonly IBookings _client;
         private readonly ILogger<ApiController> _log;
 
-        // private string UserId => User.Claims
-        //         .FirstOrDefault(x => x.Type == "sub")
-        //         .Value;
-
         public ApiController(
-            IHttpClientFactory clientFactory,
+            IBookings client,
             ILogger<ApiController> log
         )
         {
-            _clientFactory = clientFactory;
+            _client = client;
             _log = log;
         }
 
@@ -70,7 +66,7 @@ namespace Meets.Controllers
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
 
-            var res = await Client.SendAsync(req);
+            var res = await _client.List(req);
             if (res.StatusCode == HttpStatusCode.Unauthorized)
             {
                 _log.LogInformation("Accesstoken was rejected for {User}.", User.Id() ?? "n/a");
@@ -111,7 +107,7 @@ namespace Meets.Controllers
                 };
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
 
-                var res = await Client.SendAsync(req);
+                var res = await _client.Post(req);
                 if (res.StatusCode == HttpStatusCode.Unauthorized)
                 {
                     _log.LogInformation("Accesstoken was rejected for {User}.", User.Id() ?? "n/a");
@@ -149,7 +145,7 @@ namespace Meets.Controllers
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
 
-            var res = await Client.SendAsync(req);
+            var res = await _client.Delete(req);
             if (res.StatusCode == HttpStatusCode.Unauthorized)
             {
                 _log.LogInformation("Accesstoken was rejected for {User}.", User.Id() ?? "n/a");

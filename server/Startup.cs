@@ -1,11 +1,10 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.IO;
-using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using IdentityModel;
 using Meets.RefreshTokenHandling;
+using Meets.Services;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -55,8 +54,6 @@ namespace Meets
 
             services.AddControllersWithViews();
 
-            
-
             services.AddAuthentication(options =>
                 {
                     options.DefaultScheme = CookieScheme;
@@ -89,12 +86,7 @@ namespace Meets
                     options.AccessDeniedPath = new PathString("/");
                 });
             
-            services.AddHttpClient("broker", opts =>
-            {
-                Configuration.GetSection("Broker").Bind(opts);
-                opts.DefaultRequestHeaders.Accept.Add(
-                    new MediaTypeWithQualityHeaderValue("application/json"));
-            });
+            services.AddBrokerClient(Configuration);
 
             if (Configuration["Dataprotection:Type"] == "Docker")
             {
