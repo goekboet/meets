@@ -158,19 +158,20 @@ decodeBookingRequest = Decode.map3 BookingRequest
   (Decode.field "timeId" Decode.string)
 
 type SessionState
-  = Fresh
+  = Fresh String
   | Stale
   | None
 
 isSignedIn : SessionState -> Bool
 isSignedIn s = case s of
-  Fresh -> True
+  Fresh _ -> True
   _     -> False
 
 -- MODEL
 
 type alias Model =
   { key : Nav.Key
+  , csrf: String
   , route : Route
   , sessionState: SessionState
   , initTime : Posix
@@ -213,15 +214,24 @@ type BookingsRsult =
 -- Init
 
 type alias Flags =
-  { hasCreds : Bool
+  { name : Maybe String
+  , csrf: String
   , now : Int
   }
+
+isNull : Maybe a -> Bool
+isNull x = case x of  
+  Just _ -> True
+  _ -> False 
+
 
 init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   ( { key = key
+    , csrf = flags.csrf
     , route = toRoute url
-    , sessionState = if flags.hasCreds then Fresh else None
+    , sessionState = Maybe.map Fresh flags.name
+      |> Maybe.withDefault None
     , timezone = Nothing
     , hostsResult = Fetching
     , timesResult = UnFetched 
@@ -233,7 +243,7 @@ init flags url key =
     [ loadHosts (toRoute url)
     , getTimesWindowFromRoute (toRoute url)
     , perform AgentZone T.here
-    , loadBookings flags.hasCreds
+    , loadBookings (isNull flags.name)
     ]
   )
 
@@ -548,7 +558,7 @@ view model =
   { title = "meets - public client"
   , body = [ div [ class "layout" ] 
              [ div [ class "homelink" ] [ homelink ]
-             , div [ class "header" ] [ logoutTrigger model ]
+             , div [ class "header" ] [ sessionControl model ]
              , div [ class "side" ] 
                [ myBookings model
                , h1 [] [ text "Hosts" ]
@@ -573,10 +583,32 @@ homelink = a [  href "/"
 -- Header
 
 logoutTrigger : Model -> Html Msg
-logoutTrigger m =
-  if isSignedIn m.sessionState
-  then Html.form [ action (logoutUrl m), method "post" ] [ input [ type_ "submit", value "Logout" ] []]
-  else text ""
+logoutTrigger m = Html.form 
+  [ action (logoutUrl m), method "post" ] 
+  [ input 
+    [ type_ "submit"
+    , value "Logout"
+    , class "logoutTrigger" 
+    ] 
+    []
+  , input
+    [ type_ "hidden"
+    , name "__RequestVerificationToken"
+    , value m.csrf
+    ]
+    []
+  ]
+
+sessionControl : Model -> Html Msg
+sessionControl m =
+  case m.sessionState of
+    Fresh n -> 
+      Html.nav [ class "sessionControl"] 
+        [ text (String.concat [ "Signed in as: ", n, " ▼"])
+        , ul []
+          [ li [] [ logoutTrigger m ] ]
+        ]
+    _ -> text ""
 
 -- Side
 

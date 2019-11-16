@@ -6,7 +6,7 @@ SECONDS=0
 echo "building to $DEST"
 echo "Transpiling to js."
 elm make src/Main.elm --optimize --output="${DEST}/main.js"
-echo "Output $(wc -c ${DEST}/main.js) bytes. In $SECONDS s"
+echo "Output $(wc -c ${DEST}/main.js) bytes"
 
 SECONDS=0
 echo "Minifying elm..."
@@ -16,12 +16,12 @@ echo "Output $(wc -c ${DEST}/main.js) bytes."
 SECONDS=0
 echo "Bundling javascript.."
 browserify dates.js -o "${DEST}/bundle.js"
-echo "Output $(wc -c ${DEST}/bundle.js) bytes. In $SECONDS s"
+echo "Output $(wc -c ${DEST}/bundle.js) bytes."
 
 SECONDS=0
 echo "Minifying javacsript..."
 uglifyjs "${DEST}/bundle.js" --output="${DEST}/bundle.js"
-echo "Output $(wc -c ${DEST}/bundle.js) bytes. In $SECONDS s"
+echo "Output $(wc -c ${DEST}/bundle.js) bytes."
 
 cp style.css "${DEST}/style.css"
 cp favicon.ico $DEST

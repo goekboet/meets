@@ -4,19 +4,27 @@
 
 @{
     ViewData["Title"] = "Home Page";
-    var hasCreds = new Func<AppState, string>(s => s.HasCreds ? "true" : "false");
+}
+
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Xsrf
+
+@functions {
+    string user() => Model.Name != null
+        ? $"'{Html.Encode(Model.Name)}'"
+        : "null";
+
+    string csrf() => $"'{Xsrf.GetAndStoreTokens(Context).RequestToken}'";
 }
 
 <script>
     let appstate = 
         { 
-            hasCreds:@hasCreds(Model),
+            name: @Html.Raw(user()),
+            csrf: @Html.Raw(csrf()),
             now: Date.now()
         };
     var app = Elm.Main.init({flags: appstate});
     app.ports.getTimesWindow.subscribe(v => {
-        console.log("computing timewindow");
         app.ports.gotTimesWindow.send(toWindow(v));
-        
     })
 </script>

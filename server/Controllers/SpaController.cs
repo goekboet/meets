@@ -6,12 +6,16 @@ namespace Meets.Controllers
 {
     public class AppState
     {
-        public bool HasCreds { get; set; }
+        public string Name { get; set; }
     }
 
     public class SpaController : Controller
     {
         public ILogger<SpaController> Logger { get; }
+
+        string Name => User.Identity.IsAuthenticated
+            ? User.FindFirst(x => x.Type == "name")?.Value ?? "n/a"
+            : null;
 
         public SpaController(
             ILogger<SpaController> logger)
@@ -19,10 +23,11 @@ namespace Meets.Controllers
             Logger = logger;
         }
 
-        public IActionResult Index()
-        {
-            return View(new AppState { HasCreds = User.Identity.IsAuthenticated });
-        }
+        public IActionResult Index() => View(
+            new AppState 
+            { 
+                Name = Name 
+            });
 
         [HttpGet("/login")]
         public IActionResult Login(string sparoute)
@@ -46,6 +51,7 @@ namespace Meets.Controllers
         }
 
         [HttpPost("/logout")]
+        [ValidateAntiForgeryToken]
         public IActionResult Logout(string sparoute)
         {
             if (sparoute == null)
