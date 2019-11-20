@@ -50,16 +50,6 @@ a:visited {
     padding-right: 3vW
 }
 
-/* .header form {
-    display: grid;
-    grid-template: 1fr / 1fr;
-    justify-items: end;
-    align-items: end;
-    height: 100%;
-    padding-left: 3vw;
-    padding-right: 3vw;
-} */
-
 /* SessionControl */
 
 .sessionControl {
@@ -188,13 +178,22 @@ a:visited {
     margin: 0;
     padding:0;
     border:0;
-    display: block;
     color: darkslategray;
 }
 
 .schedules-list li:hover {
     list-style: disc;
     text-decoration: darkslategray;
+}
+
+.schedules-list li p {
+    font-family: sans-serif;
+    font-size: small;
+    margin: 0;
+    padding:0;
+    border:0;
+    color: darkslategray;
+    opacity: 0.66;
 }
 
 /* Messagerecord */
@@ -269,12 +268,43 @@ a:visited {
 .weekpointer {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas: "left year right" "left week right";
     font-family: sans-serif;
     padding-top: 1em;
     padding-bottom: 0.5em;
     margin-top: 0;
     margin-bottom: 0;
     color: darkgray;
+}
+
+#weekpointer-left {
+    grid-area: left;
+    align-self: center;
+    justify-self: right;
+}
+
+#weekpointer-year {
+    grid-area: year;
+    align-self: center;
+    justify-self: center;
+}
+
+#weekpointer-week {
+    grid-area: week;
+    align-self: center;
+    justify-self: center;
+}
+
+#weekpointer-right {
+    grid-area: right;
+    align-self: center;
+    justify-self: left;
+}
+
+.weekpointer a, .weekpointer p {
+    padding:0;
+    margin: 0;
 }
 
 .weekpointer a {

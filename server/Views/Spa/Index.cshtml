@@ -21,10 +21,12 @@
         { 
             name: @Html.Raw(user()),
             csrf: @Html.Raw(csrf()),
-            now: Date.now()
+            now: Date.now(),
+            focus: initWeekpointer()
         };
+    console.log(appstate);
     var app = Elm.Main.init({flags: appstate});
-    app.ports.getTimesWindow.subscribe(v => {
-        app.ports.gotTimesWindow.send(toWindow(v));
+    app.ports.getWeekpointer.subscribe(v => {
+        app.ports.gotWeekpointer.send(getWeekpointer(v));
     })
 </script>

@@ -16,27 +16,14 @@ import Json.Encode as Encode exposing (Value)
 import Time as T exposing (Posix)
 import Task exposing ( perform )
 import Debug
-import Week as W exposing (WeekName)
--- hello
+--import Week as W exposing (WeekName)
 -- Ports
 
-port getTimesWindow : Value -> Cmd a
 
-encodeTimesWindowInput : Maybe (String) -> Value
-encodeTimesWindowInput s =
-  let
-      wo = Maybe.andThen W.s2WeekOrder s
-  in
-    case wo of
-      Just (y, w) -> Encode.list Encode.int [y, w]
-      Nothing -> Encode.null
   
 
-port gotTimesWindow : (Value -> msg) -> Sub msg
 
-decodeTimesWindow : Decoder (Int, Int)
-decodeTimesWindow =
-  Decode.map2 Tuple.pair (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
+
 
 -- Times
 
@@ -99,12 +86,14 @@ toMsg err =
 type alias Host =
   { id : String
   , name : String
+  , timezone : String
   }
 
 decodeHost : Decoder Host
-decodeHost = Decode.map2 Host
+decodeHost = Decode.map3 Host
   (Decode.field "hostId" Decode.string)
   (Decode.field "hostName" Decode.string)
+  (Decode.field "timeZone" Decode.string)
 
 decodeHosts : Decoder (List Host)
 decodeHosts =  Decode.list decodeHost
@@ -175,12 +164,11 @@ type alias Model =
   , route : Route
   , sessionState: SessionState
   , initTime : Posix
-  , timezone: Maybe T.Zone
+  , focus: WeekPointer
   , hostsResult: HostResult
   , timesResult: TimesResult
   , myBookingsResult: BookingsRsult 
   , notifications: List BookingConfirm
-  
   }
 
 type HostResult =
@@ -217,6 +205,7 @@ type alias Flags =
   { name : Maybe String
   , csrf: String
   , now : Int
+  , focus : WeekPointer
   }
 
 isNull : Maybe a -> Bool
@@ -232,7 +221,7 @@ init flags url key =
     , route = toRoute url
     , sessionState = Maybe.map Fresh flags.name
       |> Maybe.withDefault None
-    , timezone = Nothing
+    , focus = flags.focus
     , hostsResult = Fetching
     , timesResult = UnFetched 
     , notifications = []
@@ -241,26 +230,17 @@ init flags url key =
     }
   , Cmd.batch 
     [ loadHosts (toRoute url)
-    , getTimesWindowFromRoute (toRoute url)
-    , perform AgentZone T.here
     , loadBookings (isNull flags.name)
-    ]
+    , callTimes (flags.focus.window) (toRoute url) ]
   )
-
-getTimesWindowFromRoute : Route -> Cmd a
-getTimesWindowFromRoute r =
-  case r of
-    ScheduleRoute _ wo -> getTimesWindow <| encodeTimesWindowInput wo
-    _                  -> Cmd.none
 
 -- UPDATE
 
 type Msg
   = LinkClicked Browser.UrlRequest
   | UrlChanged Url.Url
-  | AgentZone T.Zone
   | HostsFetched (Result Http.Error (List Host))
-  | GotTimesWindow (Result Decode.Error (Int, Int))
+  | GotTimesWindow (Result Decode.Error WeekPointer)
   | TimesFetched (Result Http.Error (List Time))
   | NeedsCreds 
   | Book BookingRequest
@@ -291,13 +271,8 @@ update msg model =
     UrlChanged url ->
       ( model 
       , Cmd.batch
-        [ getTimesWindowFromRoute model.route
+        [ refreshStaleWeekpointer model
         ]
-      )
-
-    AgentZone z ->
-      ( { model | timezone = (Just z) }
-      , Cmd.none
       )
 
     GotTimesWindow w ->
@@ -309,9 +284,9 @@ update msg model =
             }
           , Cmd.none
           )
-        Ok wo -> 
-          ( model
-          , callTimes wo model.route
+        Ok wp -> 
+          ( { model | focus = wp }
+          , callTimes wp.window model.route
           )
     HostsFetched (Err (Http.BadStatus 401) ) ->
       ( { model | sessionState = Stale }
@@ -349,7 +324,7 @@ update msg model =
     
     MeetBooked (Ok b) ->
       ( model 
-      , Cmd.batch [ callBookings, getTimesWindowFromRoute model.route ] 
+      , Cmd.batch [ callBookings ] 
       ) 
 
     MeetBooked (Err (Http.BadStatus 401) )  ->
@@ -378,7 +353,7 @@ update msg model =
       ( { model 
         | notifications = c :: model.notifications 
         }
-      , getTimesWindowFromRoute model.route)        
+      , Cmd.none )        
     
     DiscardConfirmation t ->
       ( discardConfirmation t model, Cmd.none )
@@ -459,15 +434,15 @@ callBookings = Http.get
 
 -- Bookingconfirmation
 
-addConfirmation : Model -> BookingRequest -> Cmd Msg 
-addConfirmation m meet =
-  case m.timezone of
-    Just tz -> 
-      let
-        timestamp = Tuple.pair 
-      in
-        Task.perform (MeetConfirmed << Affirmative << timestamp (bookingConfirmation tz meet)) T.now
-    _ -> Cmd.none
+-- addConfirmation : Model -> BookingRequest -> Cmd Msg 
+-- addConfirmation m meet =
+--   case m.timezone of
+--     Just tz -> 
+--       let
+--         timestamp = Tuple.pair 
+--       in
+--         Task.perform (MeetConfirmed << Affirmative << timestamp (bookingConfirmation tz meet)) T.now
+--     _ -> Cmd.none
 
 addDecline : String -> Cmd Msg
 addDecline r =
@@ -495,7 +470,7 @@ discardConfirmation t m =
 
 -- Meets
 
-callTimes : (Int, Int) -> Route -> Cmd Msg
+callTimes : Window -> Route -> Cmd Msg
 callTimes (from, to) r =
   case r of
     ScheduleRoute s _ -> Http.get
@@ -513,7 +488,7 @@ callTimes (from, to) r =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-  gotTimesWindow (GotTimesWindow << Decode.decodeValue decodeTimesWindow)
+  gotWeekpointer (GotTimesWindow << Decode.decodeValue decodeWeekpointer)
 
 -- Route
 
@@ -541,15 +516,18 @@ routeToUrl r = case r of
   ScheduleRoute s _ -> UrlB.absolute [ "hosts", s ] []
   _                 -> UrlB.absolute [] []
 
+
+
+
 addMeetFragment : String -> String
 addMeetFragment m =
   (UrlB.custom UrlB.Relative [] [] (Just m))
 
-getWeekName : Route -> Maybe (Int, Int)
-getWeekName r = case r of
-  ScheduleRoute _ (Just w) -> W.s2WeekOrder w
-  HomeRoute (Just w)       -> W.s2WeekOrder w
-  _                        -> Nothing
+-- getWeekName : Route -> Maybe (Int, Int)
+-- getWeekName r = case r of
+--   ScheduleRoute _ (Just w) -> W.s2WeekOrder w
+--   HomeRoute (Just w)       -> W.s2WeekOrder w
+--   _                        -> Nothing
 -- View
 
 
@@ -563,9 +541,6 @@ view model =
                [ myBookings model
                , h1 [] [ text "Hosts" ]
                , hosts model
-               , if List.isEmpty model.notifications then text "" else h1 [] [ text "Confirmed" ] 
-               , Maybe.map (messageRecord model.notifications) model.timezone
-                   |> Maybe.withDefault (text "")
                ]
              , div [ class "content" ] (content model)
              ]
@@ -642,52 +617,6 @@ bookigCountView r =
     BookingSuccess n -> text <| String.fromInt <| List.length n 
     BookingError -> text "!" 
 
-nextYear : (Int, Int) -> String
-nextYear (y, w) =
-  String.concat
-      [ String.padLeft 4 '0' (String.fromInt (y + 1))
-      , "-"
-      , String.padLeft 2 '0' (String.fromInt w)
-      ]
-  
-lastYear : (Int, Int) -> String
-lastYear (y, w) =
-  String.concat
-      [ String.padLeft 4 '0' (String.fromInt (y - 1))
-      , "-"
-      , String.padLeft 2 '0' (String.fromInt w)
-      ]
-
-nextWeek : (Int, Int) -> String
-nextWeek c =
-  let
-      (y, w) = W.nextWeek c 
-  in
-    String.concat
-      [ String.padLeft 4 '0' (String.fromInt y)
-      , "-"
-      , String.padLeft 2 '0' (String.fromInt w)
-      ]
-
-lastWeek : (Int, Int) -> String
-lastWeek c =
-  let
-      (y, w) = W.lastWeek c
-  in
-    String.concat
-      [ String.padLeft 4 '0' (String.fromInt y)
-      , "-"
-      , String.padLeft 2 '0' (String.fromInt w)
-      ]
-
-stepWeekPointer : Route -> String -> String
-stepWeekPointer r w = case r of
-  ScheduleRoute s _ -> UrlB.absolute [ "hosts", s ] [ UrlB.string "week" w ]
-  HomeRoute _       -> UrlB.absolute [] [ UrlB.string "week" w ]
-  _                 -> UrlB.absolute [] []
-
-
-
 -- host-list
 
 hosts : Model -> Html Msg
@@ -708,7 +637,9 @@ host m h =
         |> Maybe.withDefault False
   in
     li [ classList [("selected", selected)] ] 
-       [ a [ href (routeToUrl <| ScheduleRoute h.id Nothing)] [ text h.name ] ]
+       [ a [ href (routeToUrl <| ScheduleRoute h.id Nothing)] [ text h.name ] 
+       , p [] [ text h.timezone]
+       ]
    
 -- message-record
 
@@ -741,7 +672,7 @@ confirmView z c =
 content : Model -> List (Html Msg)
 content m = case m.route of
   HomeRoute _ -> []
-  ScheduleRoute _ _ -> weekPointer m :: times m
+  ScheduleRoute _ _ -> weekPointerView m.route m.focus :: times m
   BookingsRoute -> myBookingsListing m
   NotFound -> []
 
@@ -754,8 +685,8 @@ myBookingsListing m =
 
 bookingsView : Model -> Html Msg
 bookingsView m =
-  case (m.timezone, isSignedIn m.sessionState, m.myBookingsResult) of
-    (Just tz, True, BookingSuccess ts) ->
+  case (isSignedIn m.sessionState, m.myBookingsResult) of
+    (True, BookingSuccess ts) ->
       ul [] (List.map
         (\b -> 
           li [ class "meetitem" ]
@@ -763,14 +694,14 @@ bookingsView m =
               [ dt [] [ text "name" ]
               , dd [] [ text b.meetName ]
               , dt [] [ text "start"]
-              , dd [] [ text (startTime tz b.start) ]
+              , dd [] [ text (String.fromInt b.start) ]
               , dt [] [ text "duration"]
               , dd [] [ text (String.fromInt b.dur) ]
               ]
             , unBookBtn b.start
             ]
         ) ts)
-    (_, False, _) -> p [] [ text "Your session has become stale. You need to sign in again."] 
+    (False, _) -> p [] [ text "Your session has become stale. You need to sign in again."] 
     _ -> text ""
 
 unBookBtn : Int -> Html Msg
@@ -778,27 +709,85 @@ unBookBtn start =
   button [ onClick (UnBook start) ] [ text "UnBook" ]
 
 -- week-pointer
-weekPointer : Model -> Html Msg
-weekPointer m =
-  case m.timezone of
-      Nothing -> text ""
-      Just tz ->
-        let
-            (y, w) = Maybe.withDefault (W.posix2Week tz m.initTime)
-                      <| getWeekName m.route
-            
-            fmt n = String.padLeft n '0' << String.fromInt
-        in
-          div [ class "weekpointer" ] 
-              [ a [ class "back", href (stepWeekPointer m.route (lastYear (y, w))) ] [ text "◀" ]
-              , i [ class "label" ] [ text (fmt 4 y) ]
-              , a [ class "fwd", href (stepWeekPointer m.route (nextYear (y, w))) ] [ text "▶"]
-              , a [ class "back", href (stepWeekPointer m.route (lastWeek (y, w))) ] [ text "◀"]
-              , i [ class "label"] [ text (fmt 2 w) ]
-              , a [ class "fwd", href (stepWeekPointer m.route (nextWeek (y, w))) ] [ text "▶"]
-              ]
+-- type alias Year = String
+-- type alias WeekNumber = String
+type alias Week = String
+type alias Start = Int
+type alias End = Int
+type alias Window = (Start, End)
+type alias WeekPointer = 
+  { prev : Week
+  , curr : Week
+  , next : Week
+  , window : Window
+  }
 
+port getWeekpointer : Value -> Cmd a
 
+encodeWeek : Week -> Value
+encodeWeek w =
+  Encode.string w
+
+refreshStaleWeekpointer : Model -> Cmd Msg
+refreshStaleWeekpointer m =
+  case weekpointerStaleness m.route m.focus of
+    Just w -> getWeekpointer <| encodeWeek w
+    _ -> Cmd.none
+
+port gotWeekpointer : (Value -> msg) -> Sub msg
+
+decodeTimesWindow : Decoder Window
+decodeTimesWindow =
+  Decode.map2 Tuple.pair (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
+
+decodeWeekpointer : Decoder WeekPointer
+decodeWeekpointer =
+  Decode.map4
+    WeekPointer
+    (Decode.field "prev" Decode.string)
+    (Decode.field "curr" Decode.string)
+    (Decode.field "next" Decode.string)
+    (Decode.field "window" decodeTimesWindow)
+
+--week=2019-45
+addWeekFocusQuery : Route -> Week -> String
+addWeekFocusQuery r w =
+  let
+    query = UrlB.string "week" w 
+  in
+    case r of
+      ScheduleRoute s _ -> UrlB.absolute [ "hosts", s ] [ query ]
+      _                 -> UrlB.absolute [] [ query ]
+
+weekpointerStaleness : Route -> WeekPointer -> (Maybe Week)
+weekpointerStaleness r wp =
+  case r of
+    ScheduleRoute _ (Just wq) -> if wq == wp.curr then Nothing else (Just wq)
+    _ -> Nothing
+
+zeroPadw2 : Int -> String
+zeroPadw2 n = 
+  let
+      w =  String.append "0" (String.fromInt n)
+  in
+    String.right 2 w
+  
+
+weekPointerView : Route -> WeekPointer -> Html Msg
+weekPointerView r { prev, curr, next, window } =
+  let
+      (y, w) = case String.split "-" curr of
+        [ year, week ] -> (year, week)
+        _ -> ("", "")
+      
+  in
+    nav [ class "weekpointer" ] 
+      [ a [ href  <| addWeekFocusQuery r prev, id "weekpointer-left" ] [ text "◀" ] 
+      , p [ id "weekpointer-year" ] [ text y ]
+      , p [ id "weekpointer-week" ] [ text w ]
+      , a [ href <| addWeekFocusQuery r next, id "weekpointer-right" ] [ text "▶" ]
+      ]
+  
 -- Times
 
 times : Model -> List (Html Msg)
@@ -811,38 +800,26 @@ times m =
 
 timesView : (List Time) -> Model -> List (Html Msg) 
 timesView ts m =
-  case (m.timezone, m.route) of
-    (Just tz, ScheduleRoute _ _) -> 
-      [ ul [] (List.map (timeView tz <| isSignedIn m.sessionState) ts) 
+  case m.route of
+    (ScheduleRoute _ _) -> 
+      [ ul [] (List.map (timeView <| isSignedIn m.sessionState) ts) 
       ]
     _                                 -> [ p [] [ text "No timezone." ] ]
 
-timeView : T.Zone -> Bool -> Time -> Html Msg
-timeView z creds m = 
+timeView : Bool -> Time -> Html Msg
+timeView creds m = 
   li [ class "meetitem" ]
     [ dl [ class "meetdata"] 
       [ dt [] [ text "name" ]
       , dd [] [ text m.meetName ]
       , dt [] [ text "start"]
-      , dd [] [ text (startTime z m.start) ]
+      , dd [] [ text (String.fromInt m.start) ]
       , dt [] [ text "duration"]
       , dd [] [ text (duration m.dur) ]
       ]
     , bookView creds (BookingRequest m.hostId m.start m.meetName)
     ]
 
-startTime : T.Zone -> Int -> String
-startTime z t =
-  let
-      p = T.millisToPosix t
-      h = String.padLeft 2 '0' << String.fromInt << T.toHour z
-      m = String.padLeft 2 '0' << String.fromInt << T.toMinute z 
-  in
-    String.concat 
-      [ h p
-      , ":"
-      , m p
-      ]
 
 duration : Int -> String
 duration d =
