@@ -33,27 +33,28 @@ namespace Meets.Services
             return s;
         }
     }
-    
+
     public class Broker
     {
-        public bool Mock { get;set;}
-        public string BaseAddress {get;set;}
+        public bool Mock { get; set; }
+        public string Backend { get; set; }
+        public string Frontend { get; set; }
     }
 
     public class MockedHttpContent : HttpContent
     {
-        MemoryStream S {get;}
+        MemoryStream S { get; }
         public MockedHttpContent(string s)
         {
             S = new MemoryStream(Encoding.UTF8.GetBytes(s));
         }
 
         protected override Task SerializeToStreamAsync(
-            Stream stream, 
+            Stream stream,
             TransportContext context)
         {
             return S.CopyToAsync(stream);
-        } 
+        }
 
         protected override bool TryComputeLength(
             out long length)
@@ -72,16 +73,16 @@ namespace Meets.Services
 
     public class Outbound : IBookings
     {
-        private HttpClient Client {get;}
+        private HttpClient Client { get; }
         public Outbound(
             IOptions<Broker> opts,
             HttpClient c
         )
         {
-            c.BaseAddress = new Uri(opts.Value.BaseAddress);
+            c.BaseAddress = new Uri(opts.Value.Backend);
             c.DefaultRequestHeaders.Accept.Add(
                     new MediaTypeWithQualityHeaderValue("application/json"));
-            
+
             Client = c;
         }
 
@@ -97,7 +98,7 @@ namespace Meets.Services
 
     public class Mock : IBookings
     {
-        private ILogger<Mock> Logger {get;}
+        private ILogger<Mock> Logger { get; }
         public Mock(
             HttpClient c,
             ILogger<Mock> logger)
@@ -106,15 +107,15 @@ namespace Meets.Services
         }
         public Task<HttpResponseMessage> Delete(
             HttpRequestMessage r)
-            {
-                Logger.LogInformation("Mocked call to delte booking");
-                return Task.FromResult(
-                    new HttpResponseMessage 
-                    { 
-                        StatusCode = HttpStatusCode.OK 
-                    });
-            }
-                
+        {
+            Logger.LogInformation("Mocked call to delte booking");
+            return Task.FromResult(
+                new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK
+                });
+        }
+
 
         public Task<HttpResponseMessage> List(
             HttpRequestMessage r)
@@ -128,20 +129,20 @@ namespace Meets.Services
                         Content = new MockedHttpContent("[]")
                     }
                 );
-        } 
-                
+        }
+
 
         public Task<HttpResponseMessage> Post(
             HttpRequestMessage r)
-            {
-                Logger.LogInformation("Mocked call to add booking");
+        {
+            Logger.LogInformation("Mocked call to add booking");
 
-                return Task.FromResult(
-                    new HttpResponseMessage 
-                    { 
-                        StatusCode = HttpStatusCode.Created 
-                    });
-            } 
-                
+            return Task.FromResult(
+                new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.Created
+                });
+        }
+
     }
 }

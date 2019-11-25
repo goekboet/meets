@@ -18,7 +18,7 @@
 
     string csrf() => $"'{Xsrf.GetAndStoreTokens(Context).RequestToken}'";
 
-    string baseUrl() => $"'{Broker.Value.BaseAddress}'";
+    string baseUrl() => $"'{Broker.Value.Frontend}'";
 }
 
 <script>
