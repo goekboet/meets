@@ -17,21 +17,6 @@ import Task exposing ( perform )
 import Debug
 
 -- Times
-
-
--- MAIN
-
-main : Program Flags Model Msg
-main =
-  Browser.application
-    { init = init
-    , view = view
-    , update = update
-    , subscriptions = subscriptions
-    , onUrlChange = UrlChanged
-    , onUrlRequest = LinkClicked
-    }
-
 -- Error
 
 toMsg : Http.Error -> String
@@ -119,298 +104,6 @@ isSignedIn s = case s of
   Fresh _ -> True
   _     -> False
 
--- MODEL
-
-type alias Model =
-  { key : Nav.Key
-  , csrf: String
-  , route : Route
-  , sessionState: SessionState
-  , focus: WeekPointer
-  , apiBaseUrl : ApiBaseUrl
-  , hostsResult: HostResult
-  , timesResult: TimesResult
-  , myBookingsResult: BookingsRsult 
-  , notifications: List Notification
-  }
-
-type HostResult =
-  Fetching
-  | Fetched (List Host)
-  | Errored String
-
-type TimesResult =
-  UnFetched
-  | FetchingTimes
-  | FetchedTimes (List Appointment)
-  | ErroredTimes String
-
-type BookedResult =
-  NotBooked
-  | BookedSuccess UnixTs
-  | BookedError String
-
-type BookingsRsult =
-  NotAvailiable
-  | BookingSuccess (List Appointment)
-  | BookingError 
-
--- Init
-
-type alias ApiBaseUrl = String
-
-type alias Flags =
-  { name : Maybe String
-  , csrf: String
-  , focus : WeekPointer
-  , apiBaseUrl : ApiBaseUrl
-  }
-
-isNull : Maybe a -> Bool
-isNull x = case x of  
-  Just _ -> True
-  _ -> False 
-
-
-init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init flags url key =
-  ( { key = key
-    , csrf = flags.csrf
-    , route = toRoute url
-    , sessionState = Maybe.map Fresh flags.name
-      |> Maybe.withDefault None
-    , focus = flags.focus
-    , apiBaseUrl = flags.apiBaseUrl
-    , hostsResult = Fetching
-    , timesResult = UnFetched 
-    , notifications = []
-    , myBookingsResult = NotAvailiable
-    }
-  , Cmd.batch 
-    [ loadHosts (toRoute url) (flags.apiBaseUrl)
-    , loadBookings (isNull flags.name)
-    , callTimes (flags.apiBaseUrl) (flags.focus.window) (toRoute url) ]
-  )
-
--- UPDATE
-
-type Msg
-  = LinkClicked Browser.UrlRequest
-  | UrlChanged Url.Url
-  | HostsFetched (Result Http.Error (List Host))
-  | GotWeekpointer (Result Decode.Error WeekPointer)
-  | TimesFetched (Result Http.Error (List Appointment))
-  | GotTimesClock (Result Decode.Error (List Appointment))
-  | GotBookingsClock (Result Decode.Error (List Appointment))
-  | NeedsCreds 
-  | Book Appointment
-  | MeetBooked (Result Http.Error Appointment)
-  | UnBook Int
-  | TimeUnbooked (Result Http.Error ())
-  | MeetConfirmed Notification
-  | DiscardConfirmation NotificationIndex
-  | GotBookings (Result Http.Error (List Appointment))
-  | NoOp
-
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-  case msg of
-    LinkClicked urlRequest ->
-      case urlRequest of
-        Browser.Internal url ->
-          ( { model 
-            | route = toRoute url }
-          , Cmd.batch 
-            [ Nav.pushUrl model.key (Url.toString url)
-            , if hostSwitch url model 
-              then callTimes model.apiBaseUrl model.focus.window (toRoute url) 
-              else Cmd.none
-            ]
-          )
-
-        Browser.External href ->
-          ( model, Nav.load href )
-
-    UrlChanged url ->
-      ( model
-      , Cmd.batch
-        [ refreshStaleWeekpointer model
-        ]
-      )
-
-    GotWeekpointer w ->
-      case w of
-        Err e -> 
-          (
-            { model 
-            | timesResult = ErroredTimes (Decode.errorToString e)
-            }
-          , Cmd.none
-          )
-        Ok wp -> 
-          ( { model | focus = wp }
-          , callTimes model.apiBaseUrl wp.window model.route
-          )
-    HostsFetched (Err (Http.BadStatus 401) ) ->
-      ( { model | sessionState = Stale }
-      , Cmd.none
-      )
-
-    HostsFetched (Err e) ->
-      ( { model | timesResult = ErroredTimes <| toMsg e}
-      , Cmd.none
-      )
-
-    HostsFetched (Ok ss) ->
-      ( receiveSchedules model ss
-      , Cmd.none
-      )
-
-    TimesFetched (Err (Http.BadStatus 401) )  ->
-      ( { model | sessionState = Stale }
-      , Cmd.none
-      )
-
-    TimesFetched (Err e) ->
-      ( { model | timesResult = ErroredTimes <| toMsg e }
-      , Cmd.none )
-    
-
-    TimesFetched (Ok res) ->
-      ( receiveSchedule model res
-      , getTimesClock (Encode.list encodeAppointment res) 
-      )
-
-    GotTimesClock (Ok res) ->
-      ( receiveSchedule model res, Cmd.none )
-
-    GotTimesClock (Err e) ->
-      (model, Cmd.none)
-
-    GotBookingsClock (Ok res) ->
-      ( { model | myBookingsResult = BookingSuccess res }, Cmd.none )
-
-    GotBookingsClock (Err e) ->
-      ( { model | myBookingsResult = BookingError }, Cmd.none)
-    
-    NeedsCreds ->
-      ( model, Nav.load <| UrlB.absolute [ "login" ] [ UrlB.string "sparoute" (routeToUrl model.route) ] )
-
-    Book b ->
-      ( model, callBook b )
-    
-    MeetBooked (Ok b) ->
-      ( model 
-      , Cmd.batch [ callBookings ] 
-      ) 
-
-    MeetBooked (Err (Http.BadStatus 401) )  ->
-      ( { model | sessionState = Stale }
-      , Cmd.none
-      ) 
-
-    MeetBooked (Err e) ->
-      ( addNotification (toMsg e) model, Cmd.none ) 
-
-    UnBook r ->
-      (model, callUnbook r )
-
-    TimeUnbooked (Err (Http.BadStatus 401) )  ->
-      ( { model | sessionState = Stale }
-      , Cmd.none
-      )
-
-    TimeUnbooked (Err e) ->
-      (addNotification (toMsg e) model, Cmd.none)
-
-    TimeUnbooked (Ok _) ->
-      (model, callBookings )
-
-    MeetConfirmed c ->
-      ( { model 
-        | notifications = c :: model.notifications 
-        }
-      , Cmd.none )        
-    
-    DiscardConfirmation t ->
-      ( discardNotification t model, Cmd.none )
-
-    GotBookings (Ok bs) ->
-      ( { model 
-        | myBookingsResult = BookingSuccess bs
-        }
-      , getBookingsClock (Encode.list encodeAppointment bs) 
-      )
-
-    GotBookings (Err (Http.BadStatus 401) )  ->
-      ( { model | sessionState = Stale }
-      , Cmd.none
-      )
-
-    GotBookings (Err e) ->
-      ( model, Cmd.none )
-    
-    NoOp ->
-      ( model, Cmd.none )
-
--- Host
-
-hostUrl : ApiBaseUrl -> String
-hostUrl base = UrlB.crossOrigin base ["hosts"] []
-
-receiveSchedule : Model -> (List Appointment) -> Model
-receiveSchedule m s =
-  { m | timesResult = FetchedTimes s }
-
-loadHosts : Route -> ApiBaseUrl -> Cmd Msg
-loadHosts r m =
-  case r of
-    NotFound -> Cmd.none
-    _        -> Http.get
-      { url = hostUrl m
-      , expect = Http.expectJson HostsFetched decodeHosts }
-
-receiveSchedules : Model -> (List Host) -> Model
-receiveSchedules m ss =
-  { m | hostsResult = Fetched ss }
-
--- Bookings
-
-callBook : Appointment -> Cmd Msg
-callBook m =
-  Http.post
-    { url = UrlB.absolute [ "api", "bookings" ] []
-    , body = Http.jsonBody <| encodeAppointment m
-    , expect = Http.expectJson MeetBooked decodeAppointment
-    }
-
-callUnbook : Int -> Cmd Msg
-callUnbook r =
-  Http.request
-    { method = "DELETE"
-    , headers = []
-    , url = UrlB.absolute [ "api", "bookings", String.fromInt r ] []
-    , body = Http.emptyBody
-    , expect = Http.expectWhatever TimeUnbooked 
-    , timeout = Nothing
-    , tracker = Nothing
-    }
-
-loadBookings : Bool -> Cmd Msg
-loadBookings b =
-  if b
-    then
-      callBookings
-    else
-      Cmd.none
-
-callBookings : Cmd Msg
-callBookings = Http.get
-  { url = UrlB.absolute [ "api", "bookings" ] []
-  , expect = Http.expectJson GotBookings decodeAppointments}
-
 -- Notification
 
 type alias Notification = String
@@ -427,41 +120,6 @@ discardNotification t m =
     after = List.drop 1 before    
   in
     { m | notifications = List.concat [ before, after ] }
-
-
--- Times
-
-hostSwitch : Url.Url -> Model -> Bool
-hostSwitch url model =
-  case (toRoute url, model.route) of
-      (ScheduleRoute nH _, ScheduleRoute oH _) -> nH /= oH
-      (ScheduleRoute _  _, _                 ) -> True
-      (_                 , ScheduleRoute _  _) -> False
-      _                                        -> False
-
-callTimes : ApiBaseUrl -> Window -> Route -> Cmd Msg
-callTimes base (from, to) r =
-  case r of
-    ScheduleRoute s _ -> Http.get
-      { url = UrlB.crossOrigin base 
-        [ "hosts", s, "times" ] 
-        [ UrlB.int "from" from
-        , UrlB.int "to" to
-        ]
-      , expect = Http.expectJson TimesFetched decodeAppointments
-      }
-    _ -> Cmd.none
-
--- SUBSCRIPTIONS
-
-
-subscriptions : Model -> Sub Msg
-subscriptions _ = Sub.batch
-  [ gotWeekpointer (GotWeekpointer << Decode.decodeValue decodeWeekpointer)
-  , gotTimesClock (GotTimesClock << Decode.decodeValue decodeAppointments)
-  , gotBookingsClock (GotBookingsClock << Decode.decodeValue decodeAppointments)
-  ]
-  
 
 -- Route
 
@@ -493,6 +151,359 @@ routeHostId : Route -> Maybe HostId
 routeHostId r = case r of
   ScheduleRoute id _ -> Just id
   _                  -> Nothing
+
+-- week-pointer
+type alias Week = String
+type alias Start = Int
+type alias End = Int
+type alias Window = (Start, End)
+type alias WeekPointer = 
+  { prev : Week
+  , curr : Week
+  , next : Week
+  , window : Window
+  }
+
+port getWeekpointer : Value -> Cmd a
+
+encodeWeek : Week -> Value
+encodeWeek w =
+  Encode.string w
+
+port gotWeekpointer : (Value -> msg) -> Sub msg
+
+decodeTimesWindow : Decoder Window
+decodeTimesWindow =
+  Decode.map2 Tuple.pair (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
+
+decodeWeekpointer : Decoder WeekPointer
+decodeWeekpointer =
+  Decode.map4
+    WeekPointer
+    (Decode.field "prev" Decode.string)
+    (Decode.field "curr" Decode.string)
+    (Decode.field "next" Decode.string)
+    (Decode.field "window" decodeTimesWindow)
+
+-- Api
+
+type ApiCall a
+  = Uncalled
+  | Pending
+  | Response a
+  | Error String
+
+type alias ApiBaseUrl = String
+
+-- Host (Cross origin - considered public)
+
+-- /hosts
+loadHosts : Route -> ApiBaseUrl -> Cmd Msg
+loadHosts r m =
+  case r of
+    NotFound -> Cmd.none
+    _        -> Http.get
+      { url = UrlB.crossOrigin m ["hosts"] []
+      , expect = Http.expectJson HostsFetched decodeHosts }
+
+-- host/{hostId}/times?from={from}&to={to}
+callTimes : ApiBaseUrl -> Window -> HostId -> Cmd Msg
+callTimes base (from, to) hostId =
+  Http.get
+    { url = UrlB.crossOrigin base 
+      [ "hosts", hostId, "times" ] 
+      [ UrlB.int "from" from
+      , UrlB.int "to" to
+      ]
+    , expect = Http.expectJson TimesFetched decodeAppointments
+    }
+
+-- POST /bookings
+callBook : Appointment -> Cmd Msg
+callBook m =
+  Http.post
+    { url = UrlB.absolute [ "api", "bookings" ] []
+    , body = Http.jsonBody <| encodeAppointment m
+    , expect = Http.expectJson MeetBooked decodeAppointment
+    }
+
+-- DELETE /bookings
+callUnbook : Int -> Cmd Msg
+callUnbook r =
+  Http.request
+    { method = "DELETE"
+    , headers = []
+    , url = UrlB.absolute [ "api", "bookings", String.fromInt r ] []
+    , body = Http.emptyBody
+    , expect = Http.expectWhatever TimeUnbooked 
+    , timeout = Nothing
+    , tracker = Nothing
+    }
+
+-- /bookings
+callBookings : Cmd Msg
+callBookings = Http.get
+  { url = UrlB.absolute [ "api", "bookings" ] []
+  , expect = Http.expectJson GotBookings decodeAppointments}
+
+
+-- MAIN
+main : Program Flags Model Msg
+main =
+  Browser.application
+    { init = init
+    , view = view
+    , update = update
+    , subscriptions = subscriptions
+    , onUrlChange = UrlChanged
+    , onUrlRequest = LinkClicked
+    }
+
+-- MODEL
+type alias Model =
+  { key : Nav.Key
+  , csrf: String
+  , route : Route
+  , sessionState: SessionState
+  , focus: WeekPointer
+  , apiBaseUrl : ApiBaseUrl
+  , hostsCall: ApiCall (List Host)
+  , timesCall: ApiCall (List Appointment)
+  , bookingsCall: ApiCall (List Appointment)
+  , bookCall: ApiCall Appointment
+  , unbookCall: ApiCall () 
+  , notifications: List Notification
+  }
+
+type alias Flags =
+  { name : Maybe String
+  , csrf: String
+  , focus : WeekPointer
+  , apiBaseUrl : ApiBaseUrl
+  }
+  
+-- Init
+init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+  let
+    r = toRoute url
+    hostId = routeHostId r 
+  in
+    ( { key = key
+      , csrf = flags.csrf
+      , route = toRoute url
+      , sessionState = Maybe.map Fresh flags.name
+        |> Maybe.withDefault None
+      , focus = flags.focus
+      , apiBaseUrl = flags.apiBaseUrl
+      , hostsCall = Pending
+      , timesCall = Maybe.map (always Pending) hostId
+          |> Maybe.withDefault Uncalled 
+      , notifications = []
+      , bookingsCall = Uncalled
+      , bookCall = Uncalled
+      , unbookCall = Uncalled
+      }
+    , Cmd.batch 
+      [ loadHosts (toRoute url) (flags.apiBaseUrl)
+      , Maybe.map (always callBookings) flags.name
+          |> Maybe.withDefault Cmd.none
+      , Maybe.map (callTimes flags.apiBaseUrl flags.focus.window) hostId
+          |> Maybe.withDefault Cmd.none 
+      ]
+    )
+
+-- UPDATE
+
+type Msg
+  = LinkClicked Browser.UrlRequest
+  | UrlChanged Url.Url
+  | HostsFetched (Result Http.Error (List Host))
+  | GotWeekpointer (Result Decode.Error WeekPointer)
+  | TimesFetched (Result Http.Error (List Appointment))
+  | GotTimesClock (Result Decode.Error (List Appointment))
+  | GotBookingsClock (Result Decode.Error (List Appointment))
+  | NeedsCreds 
+  | Book Appointment
+  | MeetBooked (Result Http.Error Appointment)
+  | UnBook Int
+  | TimeUnbooked (Result Http.Error ())
+  | MeetConfirmed Notification
+  | DiscardConfirmation NotificationIndex
+  | GotBookings (Result Http.Error (List Appointment))
+  | NoOp
+
+hostSwitch : Url.Url -> Model -> Maybe HostId
+hostSwitch url model =
+  case (toRoute url, model.route) of
+      (ScheduleRoute nH _, ScheduleRoute oH _) -> if nH /= oH then Just nH else Nothing
+      (ScheduleRoute nH _, _                 ) -> Just nH
+      (_                 , ScheduleRoute _  _) -> Nothing
+      _                                        -> Nothing
+
+weekpointerStaleness : Route -> WeekPointer -> (Maybe Week)
+weekpointerStaleness r wp =
+  case r of
+    ScheduleRoute _ (Just wq) -> if wq == wp.curr then Nothing else (Just wq)
+    _ -> Nothing
+
+refreshStaleWeekpointer : Model -> Cmd Msg
+refreshStaleWeekpointer m =
+  case weekpointerStaleness m.route m.focus of
+    Just w -> getWeekpointer <| encodeWeek w
+    _ -> Cmd.none
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+  case msg of
+    LinkClicked urlRequest ->
+      case urlRequest of
+        Browser.Internal url ->
+          ( { model 
+            | route = toRoute url }
+          , Cmd.batch 
+            [ Nav.pushUrl model.key (Url.toString url)
+            , Maybe.map (callTimes model.apiBaseUrl model.focus.window) (hostSwitch url model)
+                |> Maybe.withDefault Cmd.none
+            ]
+          )
+
+        Browser.External href ->
+          ( model, Nav.load href )
+
+    UrlChanged url ->
+      ( model
+      , Cmd.batch
+        [ refreshStaleWeekpointer model
+        ]
+      )
+
+    GotWeekpointer w ->
+      case w of
+        Err e -> 
+          (
+            { model 
+            | timesCall = Error (Decode.errorToString e)
+            }
+          , Cmd.none
+          )
+        Ok wp -> 
+          ( { model | focus = wp }
+          , Maybe.map (callTimes model.apiBaseUrl wp.window) (routeHostId model.route)
+              |> Maybe.withDefault Cmd.none
+          )
+    HostsFetched (Err (Http.BadStatus 401) ) ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      )
+
+    HostsFetched (Err e) ->
+      ( { model | timesCall = Error <| toMsg e}
+      , Cmd.none
+      )
+
+    HostsFetched (Ok ss) ->
+      ( { model | hostsCall = Response ss }
+      , Cmd.none
+      )
+
+    TimesFetched (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      )
+
+    TimesFetched (Err e) ->
+      ( { model | timesCall = Error <| toMsg e }
+      , Cmd.none )
+    
+
+    TimesFetched (Ok res) ->
+      ( { model | timesCall = Response res }
+      , getTimesClock (Encode.list encodeAppointment res) 
+      )
+
+    GotTimesClock (Ok res) ->
+      ( { model | timesCall = Response res }
+      , Cmd.none 
+      )
+
+    GotTimesClock (Err e) ->
+      (model, Cmd.none)
+
+    GotBookingsClock (Ok res) ->
+      ( { model | bookingsCall = Response res }, Cmd.none )
+
+    GotBookingsClock (Err e) ->
+      ( { model | bookingsCall = Error "" }, Cmd.none)
+    
+    NeedsCreds ->
+      ( model, Nav.load <| UrlB.absolute [ "login" ] [ UrlB.string "sparoute" (routeToUrl model.route) ] )
+
+    Book b ->
+      ( { model | bookCall = Pending }, callBook b )
+    
+    MeetBooked (Ok b) ->
+      ( { model | bookCall = Response b } 
+      , Cmd.batch [ callBookings ] 
+      ) 
+
+    MeetBooked (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      ) 
+
+    MeetBooked (Err e) ->
+      ( { model | bookCall = Error (toMsg e) }, Cmd.none ) 
+
+    UnBook r ->
+      ( { model | unbookCall = Pending }, callUnbook r )
+
+    TimeUnbooked (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      )
+
+    TimeUnbooked (Err e) ->
+      ( { model | unbookCall = Error (toMsg e) }, Cmd.none)
+
+    TimeUnbooked (Ok _) ->
+      ( { model | unbookCall = Response () }, callBookings )
+
+    MeetConfirmed c ->
+      ( { model 
+        | notifications = c :: model.notifications 
+        }
+      , Cmd.none )        
+    
+    DiscardConfirmation t ->
+      ( discardNotification t model, Cmd.none )
+
+    GotBookings (Ok bs) ->
+      ( { model 
+        | bookingsCall = Response bs
+        }
+      , getBookingsClock (Encode.list encodeAppointment bs) 
+      )
+
+    GotBookings (Err (Http.BadStatus 401) )  ->
+      ( { model | sessionState = Stale }
+      , Cmd.none
+      )
+
+    GotBookings (Err e) ->
+      ( model, Cmd.none )
+    
+    NoOp ->
+      ( model, Cmd.none )
+
+-- SUBSCRIPTIONS
+
+subscriptions : Model -> Sub Msg
+subscriptions _ = Sub.batch
+  [ gotWeekpointer (GotWeekpointer << Decode.decodeValue decodeWeekpointer)
+  , gotTimesClock (GotTimesClock << Decode.decodeValue decodeAppointments)
+  , gotBookingsClock (GotBookingsClock << Decode.decodeValue decodeAppointments)
+  ]
 
 view : Model -> Browser.Document Msg
 view model =
@@ -568,25 +579,27 @@ bookingsCount m =
     [ dl 
       [ class "myBookings" ] 
       [ dt [] [ text "booked" ]
-      , dd [] [ bookigCountView m.myBookingsResult ]
+      , dd [] [ bookigCountView m ]
       ]
     ] 
 
-bookigCountView : BookingsRsult -> Html Msg
-bookigCountView r =
-  case r of
-    NotAvailiable -> text "-" 
-    BookingSuccess n -> text <| String.fromInt <| List.length n 
-    BookingError -> text "!" 
+bookigCountView : Model -> Html Msg
+bookigCountView m =
+  case m.bookingsCall of
+    Uncalled -> text "-"
+    Pending -> text "." 
+    Response n -> text <| String.fromInt <| List.length n 
+    Error _ -> text "!" 
 
 -- host-list
 
 hosts : Model -> Html Msg
 hosts m =
-  case m.hostsResult of
-    Fetching   -> text ""
-    Fetched ss -> ul [ class "schedules-list" ] (List.map (host m) ss) 
-    Errored e  -> i [] [text e] 
+  case m.hostsCall of
+    Uncalled   -> text ""
+    Pending -> div [ class "pending" ] [ text "" ]
+    Response hs -> ul [ class "schedules-list" ] (List.map (host m) hs) 
+    Error e  -> i [] [text e] 
           
 host : Model -> Host -> Html Msg
 host m h =
@@ -621,8 +634,8 @@ myBookingsListing m =
 
 bookingsView : Model -> Html Msg
 bookingsView m =
-  case (isSignedIn m.sessionState, m.myBookingsResult) of
-    (True, BookingSuccess ts) ->
+  case (isSignedIn m.sessionState, m.bookingsCall) of
+    (True, Response ts) ->
       ul [] (List.map
         (\b -> 
           li [ class "meetitem" ]
@@ -643,44 +656,7 @@ unBookBtn : Int -> Html Msg
 unBookBtn start =
   button [ onClick (UnBook start) ] [ text "UnBook" ]
 
--- week-pointer
-type alias Week = String
-type alias Start = Int
-type alias End = Int
-type alias Window = (Start, End)
-type alias WeekPointer = 
-  { prev : Week
-  , curr : Week
-  , next : Week
-  , window : Window
-  }
 
-port getWeekpointer : Value -> Cmd a
-
-encodeWeek : Week -> Value
-encodeWeek w =
-  Encode.string w
-
-refreshStaleWeekpointer : Model -> Cmd Msg
-refreshStaleWeekpointer m =
-  case weekpointerStaleness m.route m.focus of
-    Just w -> getWeekpointer <| encodeWeek w
-    _ -> Cmd.none
-
-port gotWeekpointer : (Value -> msg) -> Sub msg
-
-decodeTimesWindow : Decoder Window
-decodeTimesWindow =
-  Decode.map2 Tuple.pair (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
-
-decodeWeekpointer : Decoder WeekPointer
-decodeWeekpointer =
-  Decode.map4
-    WeekPointer
-    (Decode.field "prev" Decode.string)
-    (Decode.field "curr" Decode.string)
-    (Decode.field "next" Decode.string)
-    (Decode.field "window" decodeTimesWindow)
 
 --week=2019-45
 addWeekFocusQuery : Route -> Week -> String
@@ -691,20 +667,6 @@ addWeekFocusQuery r w =
     case r of
       ScheduleRoute s _ -> UrlB.absolute [ "hosts", s ] [ query ]
       _                 -> UrlB.absolute [] [ query ]
-
-weekpointerStaleness : Route -> WeekPointer -> (Maybe Week)
-weekpointerStaleness r wp =
-  case r of
-    ScheduleRoute _ (Just wq) -> if wq == wp.curr then Nothing else (Just wq)
-    _ -> Nothing
-
-zeroPadw2 : Int -> String
-zeroPadw2 n = 
-  let
-      w =  String.append "0" (String.fromInt n)
-  in
-    String.right 2 w
-  
 
 weekPointerView : Route -> WeekPointer -> Html Msg
 weekPointerView r { prev, curr, next, window } =
@@ -725,11 +687,11 @@ weekPointerView r { prev, curr, next, window } =
 
 times : Model -> List (Html Msg)
 times m =
-  case m.timesResult of
-    UnFetched -> [ h2 [] [ text "no host selected"] ]
-    FetchingTimes -> [ h2 [] [ text "..."] ]
-    FetchedTimes s -> timesView s m
-    ErroredTimes e -> [ h2 [] [ text e ] ]
+  case m.timesCall of
+    Uncalled -> [ h2 [] [ text "no host selected"] ]
+    Pending -> [ h2 [] [ text "..."] ]
+    Response s -> timesView s m
+    Error e -> [ h2 [] [ text e ] ]
 
 timesView : (List Appointment) -> Model -> List (Html Msg) 
 timesView ts m =
