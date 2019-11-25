@@ -5,6 +5,8 @@ var startOfISOWeek = require('date-fns/startOfISOWeek')
 var endOfISOWeek = require('date-fns/endOfISOWeek')
 var getISOWeekYear = require('date-fns/getISOWeekYear')
 var getISOWeek = require('date-fns/getISOWeek')
+var format = require('date-fns/format')
+var fromUnixTime = require('date-fns/fromUnixTime')
 
 function parseweek(s) {
     var tokens = s === null ? [] : s.split('-');
@@ -83,4 +85,22 @@ window.getWeekpointer = function getWeekpointer(week) {
                   getUnixTime(endOfISOWeek(curr) * 1000)]
 
     }
+}
+
+function oclock(t) {
+    return format(fromUnixTime(t), 'PPpp');
+
+}
+
+window.printOclock = function printOclock(appts)
+{
+     return appts.map(function f(a) {
+        return {
+            hostId: a.hostId,
+            name: a.name,
+            start: a.start,
+            oclock: oclock(a.start / 1000),
+            dur: a.dur
+        };
+     })
 }

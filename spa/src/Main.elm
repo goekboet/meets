@@ -13,49 +13,11 @@ import Url.Parser.Query as Query
 import Http
 import Json.Decode as Decode exposing (Decoder, field, string)
 import Json.Encode as Encode exposing (Value)
-import Time as T exposing (Posix)
 import Task exposing ( perform )
 import Debug
---import Week as W exposing (WeekName)
--- Ports
-
-
-  
-
-
-
 
 -- Times
 
-timeStamp : T.Zone -> Posix -> String
-timeStamp z t = 
-  String.join " "
-    [ String.join "-" 
-      [ String.fromInt <| T.toYear z t 
-      , monthNames <| T.toMonth z t
-      , String.padLeft 2 '0' <| String.fromInt <| T.toDay z t
-      ]
-    , String.join ":" 
-      [ String.padLeft 2 '0' <| String.fromInt <| T.toHour z t
-      , String.padLeft 2 '0' <| String.fromInt <| T.toMinute z t
-      ]
-    ]
-
-monthNames : T.Month -> String 
-monthNames m =
-  case m of
-    T.Jan -> "01"
-    T.Feb -> "02"
-    T.Mar -> "03"
-    T.Apr -> "04"
-    T.May -> "05"
-    T.Jun -> "06"
-    T.Jul -> "07"
-    T.Aug -> "08"
-    T.Sep -> "09"
-    T.Oct -> "10"
-    T.Nov -> "11"
-    T.Dec -> "12"
 
 -- MAIN
 
@@ -91,60 +53,61 @@ type alias Host =
 
 decodeHost : Decoder Host
 decodeHost = Decode.map3 Host
-  (Decode.field "hostId" Decode.string)
-  (Decode.field "hostName" Decode.string)
-  (Decode.field "timeZone" Decode.string)
+  (Decode.field "id" Decode.string)
+  (Decode.field "name" Decode.string)
+  (Decode.field "tz" Decode.string)
 
 decodeHosts : Decoder (List Host)
 decodeHosts =  Decode.list decodeHost
 
--- Meets
+-- Appointment
 
-type alias Time =
-  { hostId : String
-  , meetName : String
-  , start: Int
-  , dur: Int
+type alias HostId = String
+type alias HostRef = String
+type alias UnixTs = Int
+type alias Oclock = String
+type alias Minutes = Int
+
+type alias Appointment =
+  { hostId : HostId
+  , hostRef : HostRef
+  , start : UnixTs
+  , oclock: (Maybe Oclock)
+  , dur : Minutes
   }
 
-decodeTime : Decoder Time
-decodeTime = Decode.map4 Time
-    (Decode.field "hostId" Decode.string)
-    (Decode.field "meetName" Decode.string)
-    (Decode.field "start" Decode.int)
-    (Decode.field "dur" Decode.int)
+port gotTimesClock : (Value -> msg) -> Sub msg
+port gotBookingsClock : (Value -> msg) -> Sub msg
 
-decodeTimes : Decoder (List Time)
-decodeTimes = 
-  Decode.list decodeTime
+decodeAppointment : Decoder Appointment
+decodeAppointment =  
+  Decode.map5 Appointment
+      (Decode.field "hostId" Decode.string)
+      (Decode.field "name" Decode.string)
+      (Decode.field "start" Decode.int)
+      (Decode.maybe (Decode.field "oclock" Decode.string))
+      (Decode.field "dur" Decode.int) 
+ 
 
-encodeTime : Time -> Value
-encodeTime m = Encode.object 
-  [ ( "hostId", Encode.string m.hostId)
-  , ( "meetName", Encode.string m.meetName )
-  , ( "start", Encode.int m.start )
-  , ( "dur", Encode.int m.dur )
-  ]
+decodeAppointments : Decoder (List Appointment)
+decodeAppointments = 
+  Decode.list decodeAppointment
 
--- Book
-type alias BookingRequest = 
-  { hostId : String
-  , start : Int
-  , timeId : String
-  }
+port getTimesClock : Value -> Cmd a
+port getBookingsClock : Value -> Cmd a
 
-encodeBookingRequest : BookingRequest -> Value
-encodeBookingRequest r = Encode.object
-  [ ( "hostId", Encode.string r.hostId )
-  , ( "start", Encode.int r.start )
-  , ( "timeId", Encode.string r.timeId)
-  ]
-
-decodeBookingRequest : Decoder BookingRequest
-decodeBookingRequest = Decode.map3 BookingRequest
-  (Decode.field "hostId" Decode.string)
-  (Decode.field "start" Decode.int)
-  (Decode.field "timeId" Decode.string)
+encodeAppointment : Appointment -> Value
+encodeAppointment m = 
+  Encode.object 
+      [ ( "hostId", Encode.string m.hostId)
+      , ( "name", Encode.string m.hostRef )
+      , ( "start", Encode.int m.start )
+      , ( "oclock", 
+          (case m.oclock of 
+            Just c -> Encode.string c
+            _ -> Encode.null))
+      , ( "dur", Encode.int m.dur )
+      ]
 
 type SessionState
   = Fresh String
@@ -163,12 +126,12 @@ type alias Model =
   , csrf: String
   , route : Route
   , sessionState: SessionState
-  , initTime : Posix
   , focus: WeekPointer
+  , apiBaseUrl : ApiBaseUrl
   , hostsResult: HostResult
   , timesResult: TimesResult
   , myBookingsResult: BookingsRsult 
-  , notifications: List BookingConfirm
+  , notifications: List Notification
   }
 
 type HostResult =
@@ -179,33 +142,28 @@ type HostResult =
 type TimesResult =
   UnFetched
   | FetchingTimes
-  | FetchedTimes (List Time)
+  | FetchedTimes (List Appointment)
   | ErroredTimes String
-
-type alias Reason = (String, Posix)
-type alias ConfirmedMeet = (String, Posix)
-
-type BookingConfirm 
-  = Affirmative ConfirmedMeet
-  | Decline Reason 
 
 type BookedResult =
   NotBooked
-  | BookedSuccess Time
+  | BookedSuccess UnixTs
   | BookedError String
 
 type BookingsRsult =
   NotAvailiable
-  | BookingSuccess (List Time)
+  | BookingSuccess (List Appointment)
   | BookingError 
 
 -- Init
 
+type alias ApiBaseUrl = String
+
 type alias Flags =
   { name : Maybe String
   , csrf: String
-  , now : Int
   , focus : WeekPointer
+  , apiBaseUrl : ApiBaseUrl
   }
 
 isNull : Maybe a -> Bool
@@ -222,16 +180,16 @@ init flags url key =
     , sessionState = Maybe.map Fresh flags.name
       |> Maybe.withDefault None
     , focus = flags.focus
+    , apiBaseUrl = flags.apiBaseUrl
     , hostsResult = Fetching
     , timesResult = UnFetched 
     , notifications = []
     , myBookingsResult = NotAvailiable
-    , initTime = T.millisToPosix flags.now
     }
   , Cmd.batch 
-    [ loadHosts (toRoute url)
+    [ loadHosts (toRoute url) (flags.apiBaseUrl)
     , loadBookings (isNull flags.name)
-    , callTimes (flags.focus.window) (toRoute url) ]
+    , callTimes (flags.apiBaseUrl) (flags.focus.window) (toRoute url) ]
   )
 
 -- UPDATE
@@ -240,16 +198,18 @@ type Msg
   = LinkClicked Browser.UrlRequest
   | UrlChanged Url.Url
   | HostsFetched (Result Http.Error (List Host))
-  | GotTimesWindow (Result Decode.Error WeekPointer)
-  | TimesFetched (Result Http.Error (List Time))
+  | GotWeekpointer (Result Decode.Error WeekPointer)
+  | TimesFetched (Result Http.Error (List Appointment))
+  | GotTimesClock (Result Decode.Error (List Appointment))
+  | GotBookingsClock (Result Decode.Error (List Appointment))
   | NeedsCreds 
-  | Book BookingRequest
-  | MeetBooked (Result Http.Error BookingRequest)
+  | Book Appointment
+  | MeetBooked (Result Http.Error Appointment)
   | UnBook Int
   | TimeUnbooked (Result Http.Error ())
-  | MeetConfirmed BookingConfirm
-  | DiscardConfirmation Posix
-  | GotBookings (Result Http.Error (List Time))
+  | MeetConfirmed Notification
+  | DiscardConfirmation NotificationIndex
+  | GotBookings (Result Http.Error (List Appointment))
   | NoOp
 
 
@@ -262,20 +222,25 @@ update msg model =
         Browser.Internal url ->
           ( { model 
             | route = toRoute url }
-          , Nav.pushUrl model.key (Url.toString url) 
+          , Cmd.batch 
+            [ Nav.pushUrl model.key (Url.toString url)
+            , if hostSwitch url model 
+              then callTimes model.apiBaseUrl model.focus.window (toRoute url) 
+              else Cmd.none
+            ]
           )
 
         Browser.External href ->
           ( model, Nav.load href )
 
     UrlChanged url ->
-      ( model 
+      ( model
       , Cmd.batch
         [ refreshStaleWeekpointer model
         ]
       )
 
-    GotTimesWindow w ->
+    GotWeekpointer w ->
       case w of
         Err e -> 
           (
@@ -286,7 +251,7 @@ update msg model =
           )
         Ok wp -> 
           ( { model | focus = wp }
-          , callTimes wp.window model.route
+          , callTimes model.apiBaseUrl wp.window model.route
           )
     HostsFetched (Err (Http.BadStatus 401) ) ->
       ( { model | sessionState = Stale }
@@ -314,7 +279,21 @@ update msg model =
     
 
     TimesFetched (Ok res) ->
+      ( receiveSchedule model res
+      , getTimesClock (Encode.list encodeAppointment res) 
+      )
+
+    GotTimesClock (Ok res) ->
       ( receiveSchedule model res, Cmd.none )
+
+    GotTimesClock (Err e) ->
+      (model, Cmd.none)
+
+    GotBookingsClock (Ok res) ->
+      ( { model | myBookingsResult = BookingSuccess res }, Cmd.none )
+
+    GotBookingsClock (Err e) ->
+      ( { model | myBookingsResult = BookingError }, Cmd.none)
     
     NeedsCreds ->
       ( model, Nav.load <| UrlB.absolute [ "login" ] [ UrlB.string "sparoute" (routeToUrl model.route) ] )
@@ -333,7 +312,7 @@ update msg model =
       ) 
 
     MeetBooked (Err e) ->
-      ( model, addDecline (toMsg e) ) 
+      ( addNotification (toMsg e) model, Cmd.none ) 
 
     UnBook r ->
       (model, callUnbook r )
@@ -344,7 +323,7 @@ update msg model =
       )
 
     TimeUnbooked (Err e) ->
-      (model, addDecline (toMsg e) )
+      (addNotification (toMsg e) model, Cmd.none)
 
     TimeUnbooked (Ok _) ->
       (model, callBookings )
@@ -356,13 +335,13 @@ update msg model =
       , Cmd.none )        
     
     DiscardConfirmation t ->
-      ( discardConfirmation t model, Cmd.none )
+      ( discardNotification t model, Cmd.none )
 
     GotBookings (Ok bs) ->
       ( { model 
         | myBookingsResult = BookingSuccess bs
         }
-      , Cmd.none 
+      , getBookingsClock (Encode.list encodeAppointment bs) 
       )
 
     GotBookings (Err (Http.BadStatus 401) )  ->
@@ -378,19 +357,19 @@ update msg model =
 
 -- Host
 
-hostUrl : String
-hostUrl = UrlB.crossOrigin "https://broker.ego" ["hosts"] []
+hostUrl : ApiBaseUrl -> String
+hostUrl base = UrlB.crossOrigin base ["hosts"] []
 
-receiveSchedule : Model -> (List Time) -> Model
+receiveSchedule : Model -> (List Appointment) -> Model
 receiveSchedule m s =
   { m | timesResult = FetchedTimes s }
 
-loadHosts : Route -> Cmd Msg
-loadHosts  r =
+loadHosts : Route -> ApiBaseUrl -> Cmd Msg
+loadHosts r m =
   case r of
     NotFound -> Cmd.none
     _        -> Http.get
-      { url = hostUrl
+      { url = hostUrl m
       , expect = Http.expectJson HostsFetched decodeHosts }
 
 receiveSchedules : Model -> (List Host) -> Model
@@ -399,12 +378,12 @@ receiveSchedules m ss =
 
 -- Bookings
 
-callBook : BookingRequest -> Cmd Msg
+callBook : Appointment -> Cmd Msg
 callBook m =
   Http.post
     { url = UrlB.absolute [ "api", "bookings" ] []
-    , body = Http.jsonBody <| encodeBookingRequest m
-    , expect = Http.expectJson MeetBooked decodeBookingRequest
+    , body = Http.jsonBody <| encodeAppointment m
+    , expect = Http.expectJson MeetBooked decodeAppointment
     }
 
 callUnbook : Int -> Cmd Msg
@@ -430,56 +409,46 @@ loadBookings b =
 callBookings : Cmd Msg
 callBookings = Http.get
   { url = UrlB.absolute [ "api", "bookings" ] []
-  , expect = Http.expectJson GotBookings decodeTimes}
+  , expect = Http.expectJson GotBookings decodeAppointments}
 
--- Bookingconfirmation
+-- Notification
 
--- addConfirmation : Model -> BookingRequest -> Cmd Msg 
--- addConfirmation m meet =
---   case m.timezone of
---     Just tz -> 
---       let
---         timestamp = Tuple.pair 
---       in
---         Task.perform (MeetConfirmed << Affirmative << timestamp (bookingConfirmation tz meet)) T.now
---     _ -> Cmd.none
+type alias Notification = String
 
-addDecline : String -> Cmd Msg
-addDecline r =
+type alias NotificationIndex = Int
+
+addNotification : Notification -> Model -> Model
+addNotification n m = { m | notifications = n :: m.notifications }
+
+discardNotification : NotificationIndex -> Model -> Model
+discardNotification t m =
   let
-      timestamp = Tuple.pair
+    before = List.take t m.notifications
+    after = List.drop 1 before    
   in
-    Task.perform (MeetConfirmed << Decline << timestamp r) T.now
-
-bookingConfirmation : T.Zone -> BookingRequest -> String
-bookingConfirmation tz m =
-  let
-      start = timeStamp tz (T.millisToPosix m.start) 
-  in
-      String.join " " [ m.timeId, "at", start ]
-
-discardConfirmation : Posix -> Model -> Model
-discardConfirmation t m =
-  let
-      match c = case c of
-            Affirmative (_, s) -> t == s
-            Decline (_, s) -> t == s
-  in
-   { m | notifications = List.filter (not << match) m.notifications }
+    { m | notifications = List.concat [ before, after ] }
 
 
--- Meets
+-- Times
 
-callTimes : Window -> Route -> Cmd Msg
-callTimes (from, to) r =
+hostSwitch : Url.Url -> Model -> Bool
+hostSwitch url model =
+  case (toRoute url, model.route) of
+      (ScheduleRoute nH _, ScheduleRoute oH _) -> nH /= oH
+      (ScheduleRoute _  _, _                 ) -> True
+      (_                 , ScheduleRoute _  _) -> False
+      _                                        -> False
+
+callTimes : ApiBaseUrl -> Window -> Route -> Cmd Msg
+callTimes base (from, to) r =
   case r of
     ScheduleRoute s _ -> Http.get
-      { url = UrlB.crossOrigin "https://broker.ego" 
+      { url = UrlB.crossOrigin base 
         [ "hosts", s, "times" ] 
         [ UrlB.int "from" from
         , UrlB.int "to" to
         ]
-      , expect = Http.expectJson TimesFetched decodeTimes
+      , expect = Http.expectJson TimesFetched decodeAppointments
       }
     _ -> Cmd.none
 
@@ -487,8 +456,12 @@ callTimes (from, to) r =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-  gotWeekpointer (GotTimesWindow << Decode.decodeValue decodeWeekpointer)
+subscriptions _ = Sub.batch
+  [ gotWeekpointer (GotWeekpointer << Decode.decodeValue decodeWeekpointer)
+  , gotTimesClock (GotTimesClock << Decode.decodeValue decodeAppointments)
+  , gotBookingsClock (GotBookingsClock << Decode.decodeValue decodeAppointments)
+  ]
+  
 
 -- Route
 
@@ -513,23 +486,13 @@ logoutUrl m =
 
 routeToUrl : Route -> String
 routeToUrl r = case r of
-  ScheduleRoute s _ -> UrlB.absolute [ "hosts", s ] []
+  ScheduleRoute s w -> UrlB.absolute [ "hosts", s ] (Maybe.map (\x -> [UrlB.string "week" x]) w |> Maybe.withDefault [])
   _                 -> UrlB.absolute [] []
 
-
-
-
-addMeetFragment : String -> String
-addMeetFragment m =
-  (UrlB.custom UrlB.Relative [] [] (Just m))
-
--- getWeekName : Route -> Maybe (Int, Int)
--- getWeekName r = case r of
---   ScheduleRoute _ (Just w) -> W.s2WeekOrder w
---   HomeRoute (Just w)       -> W.s2WeekOrder w
---   _                        -> Nothing
--- View
-
+routeHostId : Route -> Maybe HostId
+routeHostId r = case r of
+  ScheduleRoute id _ -> Just id
+  _                  -> Nothing
 
 view : Model -> Browser.Document Msg
 view model =
@@ -545,7 +508,6 @@ view model =
              , div [ class "content" ] (content model)
              ]
            ]
-      
   }
 
 -- Homelink
@@ -641,33 +603,7 @@ host m h =
        , p [] [ text h.timezone]
        ]
    
--- message-record
-
-messageRecord : List BookingConfirm -> T.Zone -> Html Msg
-messageRecord bs tz = 
-  if List.isEmpty bs 
-    then text "" 
-    else ul [ class "messagerecord" ] (List.map (li [] << confirmView tz) bs)
-
-confirmView : T.Zone -> BookingConfirm -> List (Html Msg)
-confirmView z c =
-  case c of
-    Affirmative (m, t) -> 
-      [ dl [] 
-        [ dt [] [ text (timeStamp z t) ]
-        , dd [] [ text m ]
-        ]
-      , button [ onClick (DiscardConfirmation t) ] [] 
-      ]
-    Decline (r, t) ->
-      [ dl [] 
-        [ dt [] [ text (timeStamp z t) ]
-        , dd [] [ text r ]
-        ]
-      , button [ onClick (DiscardConfirmation t) ] [] 
-      ]
-
--- content
+-- Content view 
 
 content : Model -> List (Html Msg)
 content m = case m.route of
@@ -692,9 +628,9 @@ bookingsView m =
           li [ class "meetitem" ]
             [ dl [ class "meetdata"] 
               [ dt [] [ text "name" ]
-              , dd [] [ text b.meetName ]
+              , dd [] [ text b.hostRef ]
               , dt [] [ text "start"]
-              , dd [] [ text (String.fromInt b.start) ]
+              , dd [] [ text (Maybe.withDefault "" b.oclock) ]
               , dt [] [ text "duration"]
               , dd [] [ text (String.fromInt b.dur) ]
               ]
@@ -703,14 +639,11 @@ bookingsView m =
         ) ts)
     (False, _) -> p [] [ text "Your session has become stale. You need to sign in again."] 
     _ -> text ""
-
 unBookBtn : Int -> Html Msg
 unBookBtn start =
   button [ onClick (UnBook start) ] [ text "UnBook" ]
 
 -- week-pointer
--- type alias Year = String
--- type alias WeekNumber = String
 type alias Week = String
 type alias Start = Int
 type alias End = Int
@@ -798,7 +731,7 @@ times m =
     FetchedTimes s -> timesView s m
     ErroredTimes e -> [ h2 [] [ text e ] ]
 
-timesView : (List Time) -> Model -> List (Html Msg) 
+timesView : (List Appointment) -> Model -> List (Html Msg) 
 timesView ts m =
   case m.route of
     (ScheduleRoute _ _) -> 
@@ -806,26 +739,25 @@ timesView ts m =
       ]
     _                                 -> [ p [] [ text "No timezone." ] ]
 
-timeView : Bool -> Time -> Html Msg
-timeView creds m = 
+timeView : Bool -> Appointment -> Html Msg
+timeView creds appt = 
   li [ class "meetitem" ]
     [ dl [ class "meetdata"] 
       [ dt [] [ text "name" ]
-      , dd [] [ text m.meetName ]
+      , dd [] [ text appt.hostRef ]
       , dt [] [ text "start"]
-      , dd [] [ text (String.fromInt m.start) ]
+      , dd [] [ text (Maybe.withDefault "" appt.oclock) ]
       , dt [] [ text "duration"]
-      , dd [] [ text (duration m.dur) ]
+      , dd [] [ text (duration appt.dur) ]
       ]
-    , bookView creds (BookingRequest m.hostId m.start m.meetName)
+    , bookView creds appt
     ]
-
 
 duration : Int -> String
 duration d =
   String.concat [ String.fromInt d, " ", "min" ]
 
-bookView : Bool -> BookingRequest -> Html Msg
+bookView : Bool -> Appointment -> Html Msg
 bookView hasCreds m =
   let
     focus =  classList [ ]   

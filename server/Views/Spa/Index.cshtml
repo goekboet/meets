@@ -1,5 +1,7 @@
 ﻿@using Meets.Controllers;
-@using System;
+@using Meets.Services;
+@using Microsoft.Extensions.Options
+
 @model AppState;
 
 @{
@@ -7,6 +9,7 @@
 }
 
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Xsrf
+@inject IOptions<Broker> Broker
 
 @functions {
     string user() => Model.Name != null
@@ -14,6 +17,8 @@
         : "null";
 
     string csrf() => $"'{Xsrf.GetAndStoreTokens(Context).RequestToken}'";
+
+    string baseUrl() => $"'{Broker.Value.BaseAddress}'";
 }
 
 <script>
@@ -21,12 +26,22 @@
         { 
             name: @Html.Raw(user()),
             csrf: @Html.Raw(csrf()),
-            now: Date.now(),
-            focus: initWeekpointer()
+            focus: initWeekpointer(),
+            apiBaseUrl: @Html.Raw(baseUrl())
         };
-    console.log(appstate);
+
     var app = Elm.Main.init({flags: appstate});
     app.ports.getWeekpointer.subscribe(v => {
         app.ports.gotWeekpointer.send(getWeekpointer(v));
+    })
+    app.ports.getTimesClock.subscribe(v => {
+        //console.log("times")
+        //console.log(v);
+        app.ports.gotTimesClock.send(printOclock(v));
+    })
+    app.ports.getBookingsClock.subscribe(v => {
+        //console.log("bookings")
+        //console.log(v);
+        app.ports.gotBookingsClock.send(printOclock(v));
     })
 </script>
