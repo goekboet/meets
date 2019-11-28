@@ -4,7 +4,7 @@ import Browser
 import Browser.Navigation as Nav
 import Browser.Dom as Dom
 import Html exposing (..)
-import Html.Events exposing (onClick, onFocus)
+import Html.Events exposing (onClick)
 import Html.Attributes exposing (..)
 import Url
 import Url.Builder as UrlB
@@ -13,8 +13,6 @@ import Url.Parser.Query as Query
 import Http
 import Json.Decode as Decode exposing (Decoder, field, string)
 import Json.Encode as Encode exposing (Value)
-import Task exposing ( perform )
-import Debug
 
 -- Times
 -- Error
@@ -552,7 +550,7 @@ sessionControl m =
   case m.sessionState of
     Fresh n -> 
       Html.nav [ class "sessionControl"] 
-        [ text (String.concat [ "Signed in as: ", n, " ▼"])
+        [ text (String.concat [ "Signed in: ", n, " ▼"])
         , ul []
           [ li [] [ logoutTrigger m ] ]
         ]

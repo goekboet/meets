@@ -1,4 +1,4 @@
-FROM node:12
+FROM node:12 AS build-env
 
 WORKDIR /home/elm
 RUN curl -L -o elm.gz https://github.com/elm/compiler/releases/download/0.19.0/binary-for-linux-64-bit.gz
@@ -13,6 +13,13 @@ COPY package.json package-lock.json ./
 RUN npm install date-fns@2.4.1
 
 COPY . .
-ENTRYPOINT [ "./build.sh" ]
+RUN ./build.sh
+
+FROM ego/aspnet:3.0
+WORKDIR /home/meets_spa
+
+COPY --from=build-env /home/spa/dist ./build
+
+CMD cp ./build/* ./pub 
 
 
