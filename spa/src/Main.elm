@@ -1,4 +1,4 @@
-port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Notification, NotificationIndex, Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addNotification, addWeekFocusQuery, bookView, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, discardNotification, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, host, hostSwitch, hosts, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, timeView, times, timesView, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
+port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookView, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, host, hostSwitch, hosts, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, timeView, times, timesView, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
 
 import Browser
 import Browser.Dom as Dom
@@ -156,37 +156,6 @@ isSignedIn s =
 
         _ ->
             False
-
-
-
--- Notification
-
-
-type alias Notification =
-    String
-
-
-type alias NotificationIndex =
-    Int
-
-
-addNotification : Notification -> Model -> Model
-addNotification n m =
-    { m | notifications = n :: m.notifications }
-
-
-discardNotification : NotificationIndex -> Model -> Model
-discardNotification t m =
-    let
-        before =
-            List.take t m.notifications
-
-        after =
-            List.drop 1 before
-    in
-    { m | notifications = List.concat [ before, after ] }
-
-
 
 -- Route
 
@@ -415,7 +384,6 @@ type alias Model =
     , bookingsCall : ApiCall (List Appointment)
     , bookCall : ApiCall Appointment
     , unbookCall : ApiCall ()
-    , notifications : List Notification
     }
 
 
@@ -453,7 +421,6 @@ init flags url key =
       , timesCall =
             Maybe.map (always Pending) hostId
                 |> Maybe.withDefault Uncalled
-      , notifications = []
       , bookingsCall = Uncalled
       , bookCall = Uncalled
       , unbookCall = Uncalled
@@ -486,8 +453,6 @@ type Msg
     | MeetBooked (Result Http.Error Appointment)
     | UnBook Int
     | TimeUnbooked (Result Http.Error ())
-    | MeetConfirmed Notification
-    | DiscardConfirmation NotificationIndex
     | GotBookings (Result Http.Error (List Appointment))
     | NoOp
 
@@ -680,16 +645,6 @@ update msg model =
 
         TimeUnbooked (Ok _) ->
             ( { model | unbookCall = Response () }, callBookings )
-
-        MeetConfirmed c ->
-            ( { model
-                | notifications = c :: model.notifications
-              }
-            , Cmd.none
-            )
-
-        DiscardConfirmation t ->
-            ( discardNotification t model, Cmd.none )
 
         GotBookings (Ok bs) ->
             ( { model
