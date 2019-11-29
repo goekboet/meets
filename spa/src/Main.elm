@@ -1,4 +1,4 @@
-port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookView, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, host, hostSwitch, hosts, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, timeView, times, timesView, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
+port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, host, hostSwitch, hosts, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, times, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
 
 import Browser
 import Browser.Dom as Dom
@@ -14,6 +14,7 @@ import Url
 import Url.Builder as UrlB
 import Url.Parser as UrlP exposing ((</>), (<?>))
 import Url.Parser.Query as Query
+import Dict as Dict exposing (Dict)
 
 
 
@@ -305,7 +306,7 @@ callTimes base ( from, to ) hostId =
                 [ UrlB.int "from" from
                 , UrlB.int "to" to
                 ]
-        , expect = Http.expectJson TimesFetched decodeAppointments
+        , expect = Http.expectJson AppointmentsFetched decodeAppointments
         }
 
 
@@ -315,10 +316,13 @@ callTimes base ( from, to ) hostId =
 
 callBook : Appointment -> Cmd Msg
 callBook m =
+  let
+      ctor = MeetBooked << Tuple.pair m.start
+  in
     Http.post
         { url = UrlB.absolute [ "api", "bookings" ] []
         , body = Http.jsonBody <| encodeAppointment m
-        , expect = Http.expectJson MeetBooked decodeAppointment
+        , expect = Http.expectJson ctor decodeAppointment
         }
 
 
@@ -333,7 +337,7 @@ callUnbook r =
         , headers = []
         , url = UrlB.absolute [ "api", "bookings", String.fromInt r ] []
         , body = Http.emptyBody
-        , expect = Http.expectWhatever TimeUnbooked
+        , expect = Http.expectWhatever (Unbooked << Tuple.pair r)
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -350,23 +354,10 @@ callBookings =
         , expect = Http.expectJson GotBookings decodeAppointments
         }
 
-
-
--- MAIN
-
-
-main : Program Flags Model Msg
-main =
-    Browser.application
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        , onUrlChange = UrlChanged
-        , onUrlRequest = LinkClicked
-        }
-
-
+type alias BookCommandRecord = ( UnixTs, ApiCall Appointment ) 
+type alias UnbookCommandRecord = ( UnixTs, ApiCall () )
+type alias BookCommandHistory = Dict UnixTs (ApiCall Appointment) 
+type alias UnbookCommandHistory = Dict UnixTs (ApiCall ())
 
 -- MODEL
 
@@ -382,8 +373,8 @@ type alias Model =
     , hostsCall : ApiCall (List Host)
     , timesCall : ApiCall (List Appointment)
     , bookingsCall : ApiCall (List Appointment)
-    , bookCall : ApiCall Appointment
-    , unbookCall : ApiCall ()
+    , bookCallHistory : BookCommandHistory
+    , unbookCallHistory : UnbookCommandHistory
     }
 
 
@@ -394,7 +385,19 @@ type alias Flags =
     , apiBaseUrl : ApiBaseUrl
     }
 
+-- MAIN
 
+
+main : Program Flags Model Msg
+main =
+    Browser.application
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        , onUrlChange = UrlChanged
+        , onUrlRequest = LinkClicked
+        }
 
 -- Init
 
@@ -422,8 +425,8 @@ init flags url key =
             Maybe.map (always Pending) hostId
                 |> Maybe.withDefault Uncalled
       , bookingsCall = Uncalled
-      , bookCall = Uncalled
-      , unbookCall = Uncalled
+      , bookCallHistory = Dict.empty
+      , unbookCallHistory = Dict.empty
       }
     , Cmd.batch
         [ loadHosts (toRoute url) flags.apiBaseUrl
@@ -445,14 +448,14 @@ type Msg
     | WeekpointerDebounced Debounce.Msg
     | HostsFetched (Result Http.Error (List Host))
     | GotWeekpointer (Result Decode.Error WeekPointer)
-    | TimesFetched (Result Http.Error (List Appointment))
+    | AppointmentsFetched (Result Http.Error (List Appointment))
     | GotTimesClock (Result Decode.Error (List Appointment))
     | GotBookingsClock (Result Decode.Error (List Appointment))
     | NeedsCreds
     | Book Appointment
-    | MeetBooked (Result Http.Error Appointment)
+    | MeetBooked (UnixTs, Result Http.Error Appointment)
     | UnBook Int
-    | TimeUnbooked (Result Http.Error ())
+    | Unbooked (UnixTs, (Result Http.Error ()))
     | GotBookings (Result Http.Error (List Appointment))
     | NoOp
 
@@ -584,18 +587,21 @@ update msg model =
             , Cmd.none
             )
 
-        TimesFetched (Err (Http.BadStatus 401)) ->
-            ( { model | sessionState = Stale }
+        AppointmentsFetched (Err (Http.BadStatus 401)) ->
+            ( { model 
+              | sessionState = Stale }
             , Cmd.none
             )
 
-        TimesFetched (Err e) ->
+        AppointmentsFetched (Err e) ->
             ( { model | timesCall = Error <| toMsg e }
             , Cmd.none
             )
 
-        TimesFetched (Ok res) ->
-            ( { model | timesCall = Response res }
+        AppointmentsFetched (Ok res) ->
+            ( { model 
+            | timesCall = Response res
+            , bookCallHistory = Dict.empty }
             , getTimesClock (Encode.list encodeAppointment res)
             )
 
@@ -617,34 +623,49 @@ update msg model =
             ( model, Nav.load <| UrlB.absolute [ "login" ] [ UrlB.string "sparoute" (routeToUrl model.route) ] )
 
         Book b ->
-            ( { model | bookCall = Pending }, callBook b )
+            ( { model | bookCallHistory = Dict.insert b.start Pending model.bookCallHistory }, callBook b )
 
-        MeetBooked (Ok b) ->
-            ( { model | bookCall = Response b }
+        MeetBooked (ts, Ok b) ->
+            ( { model | bookCallHistory = Dict.insert b.start (Response b) model.bookCallHistory }
             , Cmd.batch [ callBookings ]
             )
 
-        MeetBooked (Err (Http.BadStatus 401)) ->
-            ( { model | sessionState = Stale }
+        MeetBooked (ts, Err (Http.BadStatus 401)) ->
+            ( { model 
+              | sessionState = Stale
+              , bookCallHistory = Dict.insert ts (Error "Need to re-login.") model.bookCallHistory}
             , Cmd.none
             )
 
-        MeetBooked (Err e) ->
-            ( { model | bookCall = Error (toMsg e) }, Cmd.none )
+        MeetBooked (ts, Err e) ->
+            ( { model 
+              | bookCallHistory = Dict.insert ts (Error (toMsg e)) model.bookCallHistory }
+            , Cmd.none
+            )
 
         UnBook r ->
-            ( { model | unbookCall = Pending }, callUnbook r )
+            ( { model 
+            | unbookCallHistory = Dict.insert r Pending model.unbookCallHistory }
+            , callUnbook r )
 
-        TimeUnbooked (Err (Http.BadStatus 401)) ->
-            ( { model | sessionState = Stale }
+        Unbooked (ts, (Err (Http.BadStatus 401))) ->
+            ( { model 
+              | sessionState = Stale
+              , unbookCallHistory = Dict.insert ts (Error "Need to login") model.unbookCallHistory }
             , Cmd.none
             )
 
-        TimeUnbooked (Err e) ->
-            ( { model | unbookCall = Error (toMsg e) }, Cmd.none )
+        Unbooked (ts, Err e) ->
+            ( { model 
+              | unbookCallHistory = Dict.insert ts (Error (toMsg e)) model.unbookCallHistory 
+              }
+              , Cmd.none )
 
-        TimeUnbooked (Ok _) ->
-            ( { model | unbookCall = Response () }, callBookings )
+        Unbooked (ts, Ok _) ->
+            ( { model 
+              | unbookCallHistory = Dict.insert ts (Response ()) model.unbookCallHistory 
+              }
+              , Cmd.none )
 
         GotBookings (Ok bs) ->
             ( { model
@@ -874,23 +895,10 @@ bookingsView : Model -> Html Msg
 bookingsView m =
     case ( isSignedIn m.sessionState, m.bookingsCall ) of
         ( True, Response ts ) ->
-            ul []
-                (List.map
-                    (\b ->
-                        li [ class "meetitem" ]
-                            [ dl [ class "meetdata" ]
-                                [ dt [] [ text "name" ]
-                                , dd [] [ text b.hostRef ]
-                                , dt [] [ text "start" ]
-                                , dd [] [ text (Maybe.withDefault "" b.oclock) ]
-                                , dt [] [ text "duration" ]
-                                , dd [] [ text (String.fromInt b.dur) ]
-                                ]
-                            , unBookBtn b.start
-                            ]
-                    )
+            ul [] <|
+                List.map
+                    (bookingView m.sessionState m.unbookCallHistory)
                     ts
-                )
 
         ( False, _ ) ->
             p [] [ text "Your session has become stale. You need to sign in again." ]
@@ -902,6 +910,26 @@ bookingsView m =
 unBookBtn : Int -> Html Msg
 unBookBtn start =
     button [ onClick (UnBook start) ] [ text "UnBook" ]
+
+bookingView : SessionState -> UnbookCommandHistory -> Appointment -> Html Msg
+bookingView s history appt =
+    li [ class "meetitem" ]
+        [ dl [ class "meetdata" ]
+            [ dt [] [ text "name" ]
+            , dd [] [ text appt.hostRef ]
+            , dt [] [ text "start" ]
+            , dd [] [ text (Maybe.withDefault "" appt.oclock) ]
+            , dt [] [ text "duration" ]
+            , dd [] [ text (duration appt.dur) ]
+            ]
+        , case (isSignedIn s, Dict.get appt.start history) of
+            (False, _) -> text ""
+            (_, Just Pending) -> button [ class "ofinterest"] [ text "" ]
+            (_, Just (Response _)) -> button [ class "ofinterest" ] [ text "Unbooked." ]
+            (_, Just (Error msg)) -> button [ class "ofinterest" ] [ text msg ]
+            (_, Nothing) -> button [ onClick (Book appt) ] [ text "Unbook" ]
+            _ -> text ""
+        ]
 
 
 
@@ -955,25 +983,25 @@ times m =
             [ h2 [] [ text "..." ] ]
 
         Response s ->
-            timesView s m
+            appointmentListView s m
 
         Error e ->
             [ h2 [] [ text e ] ]
 
 
-timesView : List Appointment -> Model -> List (Html Msg)
-timesView ts m =
+appointmentListView : List Appointment -> Model -> List (Html Msg)
+appointmentListView ts m =
     case m.route of
         ScheduleRoute _ _ ->
-            [ ul [] (List.map (timeView <| isSignedIn m.sessionState) ts)
+            [ ul [] (List.map ( appointmentView m.sessionState m.bookCallHistory ) ts)
             ]
 
         _ ->
             [ p [] [ text "No timezone." ] ]
 
 
-timeView : Bool -> Appointment -> Html Msg
-timeView creds appt =
+appointmentView : SessionState -> BookCommandHistory -> Appointment -> Html Msg
+appointmentView s history appt =
     li [ class "meetitem" ]
         [ dl [ class "meetdata" ]
             [ dt [] [ text "name" ]
@@ -983,23 +1011,16 @@ timeView creds appt =
             , dt [] [ text "duration" ]
             , dd [] [ text (duration appt.dur) ]
             ]
-        , bookView creds appt
+        , case (isSignedIn s, Dict.get appt.start history) of
+            (False, _) -> button [ onClick NeedsCreds ] [ text "Sign in to book." ]
+            (_, Just Pending) -> button [ class "ofinterest"] [ text "" ]
+            (_, Just (Response _)) -> button [ class "ofinterest" ] [ text "Booked." ]
+            (_, Just (Error msg)) -> button [ class "ofinterest" ] [ text msg ]
+            (_, Nothing) -> button [ onClick (Book appt) ] [ text "Book" ]
+            _ -> text ""
         ]
 
 
 duration : Int -> String
 duration d =
     String.concat [ String.fromInt d, " ", "min" ]
-
-
-bookView : Bool -> Appointment -> Html Msg
-bookView hasCreds m =
-    let
-        focus =
-            classList []
-    in
-    if hasCreds then
-        button [ focus, onClick (Book m) ] [ text "Book" ]
-
-    else
-        button [ focus, onClick NeedsCreds ] [ text "Sign in to book." ]
