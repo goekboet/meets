@@ -454,7 +454,7 @@ type Msg
     | NeedsCreds
     | Book Appointment
     | MeetBooked (UnixTs, Result Http.Error Appointment)
-    | UnBook Int
+    | Unbook Int
     | Unbooked (UnixTs, (Result Http.Error ()))
     | GotBookings (Result Http.Error (List Appointment))
     | NoOp
@@ -536,6 +536,9 @@ update msg model =
             ( model
             , Cmd.batch
                 [ refreshStaleWeekpointer model
+                , case model.route of
+                    BookingsRoute -> callBookings
+                    _             -> Cmd.none
                 ]
             )
 
@@ -643,7 +646,7 @@ update msg model =
             , Cmd.none
             )
 
-        UnBook r ->
+        Unbook r ->
             ( { model 
             | unbookCallHistory = Dict.insert r Pending model.unbookCallHistory }
             , callUnbook r )
@@ -670,6 +673,7 @@ update msg model =
         GotBookings (Ok bs) ->
             ( { model
                 | bookingsCall = Response bs
+                , unbookCallHistory = Dict.empty
               }
             , getBookingsClock (Encode.list encodeAppointment bs)
             )
@@ -909,7 +913,7 @@ bookingsView m =
 
 unBookBtn : Int -> Html Msg
 unBookBtn start =
-    button [ onClick (UnBook start) ] [ text "UnBook" ]
+    button [ onClick (Unbook start) ] [ text "UnBook" ]
 
 bookingView : SessionState -> UnbookCommandHistory -> Appointment -> Html Msg
 bookingView s history appt =
@@ -927,7 +931,7 @@ bookingView s history appt =
             (_, Just Pending) -> button [ class "ofinterest"] [ text "" ]
             (_, Just (Response _)) -> button [ class "ofinterest" ] [ text "Unbooked." ]
             (_, Just (Error msg)) -> button [ class "ofinterest" ] [ text msg ]
-            (_, Nothing) -> button [ onClick (Book appt) ] [ text "Unbook" ]
+            (_, Nothing) -> button [ onClick (Unbook appt.start) ] [ text "Unbook" ]
             _ -> text ""
         ]
 
