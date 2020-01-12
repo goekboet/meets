@@ -74,7 +74,7 @@ namespace Meets
                     options.Scope.Add("bookings");
                     options.Scope.Add("profile");
                     options.Scope.Add("offline_access");
-
+                    
                     options.ClaimActions.MapAllExcept("iss", "nbf", "exp", "aud", "nonce", "iat", "c_hash");
 
                     options.TokenValidationParameters = new TokenValidationParameters
