@@ -1,383 +1,74 @@
 body {
-    margin:0;
+    background-color: cornflowerblue;
     padding: 0;
+    margin: 0;
 }
-
-a {
-    text-decoration: none;
-    border: none;
-}
-
-a:visited {
-    color: inherit;
-}
-
-.layout {
+.root-view {
+    background-color: aliceblue;
     height: 100vh;
-    display: grid;
-    grid-template-columns: 32vw auto;
-    grid-template-rows: 21vh auto;
-    grid-template-areas: "homelink header" "side content";
-  }
-
-/* Homelink */
-
-.homelink {
-    grid-area: homelink;
-    background-color: darkcyan;
-    display: grid;
-    grid-template: 1fr / 1fr;
-    align-items: end;
-    justify-items: start;
-    padding-left: 3vw;
-}
-
-  .homelink a {
+    width: 100vw;
     margin: 0;
     padding: 0;
-    font-size: 4em;
-    margin-bottom: 1vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.component {
+    padding-left: 2em;
+    padding-right: 2em;
+    margin-bottom: 1em;
+    padding-bottom: 1em;
+    border-bottom: solid;
+    border-color: lightsteelblue;
+}
+
+.routeLink a {
     font-family: sans-serif;
-    color: burlywood;
+    font-size: 8em;
+    text-decoration: underline;
     font-weight: bold;
-  }
-
-.header {
-    grid-area: header;
-    background-color: darkcyan;
-    display: grid;
-    grid-template: 1fr / 1fr;
-    padding-right: 3vW
+    color: steelblue;
 }
 
-/* SessionControl */
-
-.sessionControl {
-  margin-bottom: 1vh;
-  background: none;
-  font-family: sans-serif;
-  color: burlywood;
-  font-weight: bold;
-  font-size: 1em;
-  border: none;
-  justify-self: end;
-  align-self: end;
-}
-
-.sessionControl ul {
-    visibility: hidden;
-    opacity: 0;
-    position: absolute;
-    transition: all 0.5s ease;
-    right: 0;
-    display: none;
-    list-style: none;
-    text-decoration: none;
-    width: 10em;
-    background-color: darkcyan;
-    padding-right: 3vw;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+.breadcrumbs p {
+    font-size: 2.5em;
     margin: 0;
-}
-
-.sessionControl:hover > ul {
-    visibility: visible;
-    opacity: 1;
-    display: grid;
-    grid-template: 1fr / 1fr;
-    justify-items: right;
-}
-
-.logoutTrigger {
-    background:none;
-    border: none;
-    color: burlywood;
+    padding: 0;
     font-family: sans-serif;
-    font-size: unset;
+    color: goldenrod;
+}
+
+.sessionstatus p {
+    font-family: sans-serif;
+    font-size: 2.5em;
+    color: goldenrod;
+    margin: 0;
+    display: inline;
+}
+
+.sessionstatus a {
     font-weight: bold;
     text-decoration: underline;
 }
 
-/* .header form input {
-    
-} */
-
-.side {
-    grid-area: side;
+.sessionstatus b {
+    font-family: sans-serif;
+    font-size: 2.5em;
+    color: goldenrod;
     margin: 0;
-    padding-left: 3vw;
-    padding-right: 3vw;
-    background-color: darkgray;
+    /* padding-left: 0.25em; */
+    display: inline;
 }
 
-.side h1 {
+.sessionstatus form {
+    display: inline;
+}
+
+.sessionstatus input {
     font-family: sans-serif;
-    padding-top: 0.5em;
-    padding-bottom: 0;
-    margin-top: 0;
-    margin-bottom: 0;
-    color: darkslategray;
-}
-
-/* myBookings */
-
-.myBookings {
-    display: grid;
-    grid-template: 1fr / 1fr 1fr;
-    background: darkslategray;
-    color: darkgray;
-    padding-left: 1em;
-    padding-right: 1em;
-    padding-bottom: 0.5em;
-    padding-top: 0.5em;
-    border-radius: 20px;
-    font-family: sans-serif;
-    margin-top: 3vh;
-    margin-bottom: 0;
-}
-
-.myBookings dd {
-    justify-self: end;
-}
-
-.login-to-book {
-    display: grid;
-    grid-template: 1fr / 1fr 1fr;
-    background: darkslategray;
-    color: darkgray;
-    padding-left: 1em;
-    padding-right: 1em;
-    padding-bottom: 0.5em;
-    padding-top: 0.5em;
-    border-radius: 20px;
-    font-family: sans-serif;
-    margin-top: 3vh;
-}
-
-/* Schdeuleslist */
-.selected {
-    list-style: disc;
-    text-decoration: darkslategray;
-}
-
-.schedules-list {
-    list-style: none;
-    text-decoration: none;
-    padding: 0;
-    margin: 0;
-}
-
-.schedules-list li {
-    padding-bottom: 0.5em;
-    margin-left: 1em;
-}
-
-.schedules-list li a {
-    font-family: sans-serif;
-    margin: 0;
-    padding:0;
-    border:0;
-    color: darkslategray;
-}
-
-.schedules-list li:hover {
-    list-style: disc;
-    text-decoration: darkslategray;
-}
-
-.schedules-list li p {
-    font-family: sans-serif;
-    font-size: small;
-    margin: 0;
-    padding:0;
-    border:0;
-    color: darkslategray;
-    opacity: 0.66;
-}
-
-/* Messagerecord */
-
-.messagerecord {
-    padding:0;
-    margin:0;
-}
-
-.messagerecord li {
-    list-style: none;
-    margin-left: 1em;
-    padding: 0;
-    display: grid;
-    grid-template: 1fr / auto auto;
-    font-family: sans-serif;
-    color: darkslategray;
-}
-
-.messagerecord dl {
-    padding-bottom: 1em;
-    margin: 0;
-}
-
-.messagerecord dt {
-    padding:0;
-    margin:0;
-    display: block;
-}
-
-.messagerecord dd {
-    padding:0;
-    margin:0;
-    display:block;
-}
-
-.messagerecord button {
-    justify-self: end;
-    align-self: start;
-    background-color: darkslategray;
-    height: 15px;
-    width: 15px;
-    border: none;
-    border-radius: 100%;
-}
-
-
-
-.content {
-    grid-area: content;
-    background-color: darkslategray;
-    padding-left: 3vw;
-    padding-right: 3vw;
-}
-
-.content h2 {
-    font-family: sans-serif;
-    padding-top: 1em;
-    padding-bottom: 0.5em;
-    margin-top: 0;
-    margin-bottom: 0;
-    color: darkgray;
-}
-
-.content ul {
-    margin-left: 0.5em;
-    margin:0;
-    padding: 0;
-    list-style: none;
-}
-
-.weekpointer {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-rows: auto;
-    grid-template-areas: "left year right" "left week right";
-    font-family: sans-serif;
-    padding-top: 1em;
-    padding-bottom: 0.5em;
-    margin-top: 0;
-    margin-bottom: 0;
-    color: darkgray;
-}
-
-#weekpointer-left {
-    grid-area: left;
-    align-self: center;
-    justify-self: right;
-}
-
-#weekpointer-year {
-    grid-area: year;
-    align-self: center;
-    justify-self: center;
-}
-
-#weekpointer-week {
-    grid-area: week;
-    align-self: center;
-    justify-self: center;
-}
-
-#weekpointer-right {
-    grid-area: right;
-    align-self: center;
-    justify-self: left;
-}
-
-.weekpointer a, .weekpointer p {
-    padding:0;
-    margin: 0;
-}
-
-.weekpointer a {
-    color: darkgray;
-}
-
-.weekpointer a:visited {
-    text-decoration: none;
-    color: darkgray;
-}
-
-.weekpointer .back {
-    justify-self: end
-}
-
-.weekpointer .label {
-    justify-self: center;
-    text-decoration: none;
-    font-style: normal;
-    align-self: center;
-}
-
-.weekpointer .fwd {
-    justify-self: start
-}
-
-.meetitem {
-    display: grid;
-    grid-template-columns: 8fr 2fr;
-    background-color: darkgray;
-    padding:0;
-    border-bottom: solid;
-    border-color: darkslategray;
-}
-
-.meetitem button {
-    padding: 1em;
-    margin: 0;
-    background-color: darkcyan;
-    color: burlywood;
-    font-family: sans-serif;
-    font-size: 1.5em;
-    font-weight: bold;
-    border: none;
-    visibility: hidden;
-}
-
-.meetitem:hover button {
-    visibility: visible; 
-}
-
-button.focus {
-    visibility: visible;
-}
-
-.meetdata {
-    display: grid;
-    grid-template-columns: 5em auto;
-    row-gap: 0.5em;
-    font-family: sans-serif;
-    color: darkslategrey;
-    margin: 0;
-    padding:1em;
-}
-
-#content dd {
-    margin: 0;
-    padding:0;
-    font-weight: bold;
-}
-
-#content dt {
-    margin:0;
-    padding:0;
+  font-size: 2.5em;
+  color: goldenrod;
+  margin: 0;
+  text-decoration: underline;
 }
 

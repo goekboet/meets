@@ -1,7 +1,7 @@
 port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, host, hostSwitch, hosts, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, times, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
 
 import Browser
-import Browser.Dom as Dom
+--import Browser.Dom as Dom
 import Browser.Navigation as Nav
 import Debounce as Debounce exposing (Debounce)
 import Html exposing (..)
@@ -160,11 +160,16 @@ isSignedIn s =
 
 -- Route
 
+type alias WeekParameter = String
+type alias HostHandle = String
+type alias NameFilterParameter = String
+type alias PageParameter = String
 
 type Route
     = NotFound
-    | HomeRoute (Maybe String)
-    | ScheduleRoute String (Maybe String)
+    | HomeRoute (Maybe WeekParameter)
+    | HostsRoute (Maybe NameFilterParameter) (Maybe PageParameter)
+    | ScheduleRoute HostHandle (Maybe WeekParameter)
     | BookingsRoute
 
 
@@ -176,6 +181,7 @@ toRoute url =
 route =
     UrlP.oneOf
         [ UrlP.map HomeRoute (UrlP.top <?> Query.string "week")
+        , UrlP.map HostsRoute (UrlP.s "hosts" <?> Query.string "notBeforeName" <?> Query.string "p" )
         , UrlP.map ScheduleRoute (UrlP.s "hosts" </> UrlP.string <?> Query.string "week")
         , UrlP.map BookingsRoute (UrlP.s "bookings")
         ]
@@ -707,18 +713,89 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "meets - public client"
     , body =
-        [ div [ class "layout" ]
-            [ div [ class "homelink" ] [ homelink ]
-            , div [ class "header" ] [ sessionControl model ]
-            , div [ class "side" ]
-                [ myBookings model
-                , h1 [] [ text "Hosts" ]
-                , hosts model
-                ]
-            , div [ class "content" ] (content model)
+        [ div 
+            [ class "root-view" ] 
+            [ div [ class "component", class "routeLink" ] [ homelink ]
+            , div [ class "component", class "sessionstatus" ] (loginTrigger model)
+            , div [ class "component", class "breadcrumbs" ] (breadcrumbs model)
+            , if isSignedIn model.sessionState 
+                then div [ class "component", class "routeLink"] (bookingsLink model)
+                else text ""
+            , div [ class "component", class "routeLink"] hostsLink
             ]
         ]
     }
+
+hostsLink : List (Html Msg)
+hostsLink =
+    [ a [ href "hosts" ] [ text "hosts"] ]
+
+bookingsLink : Model -> List (Html Msg)
+bookingsLink m =
+    [ a [ href "/bookings" ] [ text "bookings" ] ]
+        
+            
+    
+
+breadcrumbs : Model -> List (Html Msg)
+breadcrumbs m =
+    case m.route of
+        HomeRoute _ ->
+            [p [] [text "Home"]]
+
+        HostsRoute _ _ ->
+            [p [] 
+                [ a [ href "/"] [ text "Home"]
+                , text " >> "
+                , text "Hosts"]
+                ]
+
+        ScheduleRoute h _ ->
+            [p [] 
+                [ a [ href "/"] [ text "Home"] 
+                , text " >> " 
+                , a [ href "/hosts" ] [ text "Hosts"]
+                , text " >> "
+                , text h
+                ]
+            ]
+
+        BookingsRoute ->
+            [ p [] 
+                [ a [ href "/"] [ text "Home"] 
+                , text " >> " 
+                , text "Bookings"
+                ]
+            ]
+
+        NotFound ->
+            []
+            
+--   type Route
+--     = NotFound
+--     | HomeRoute (Maybe String)
+--     | ScheduleRoute String (Maybe String)
+--     | BookingsRoute  
+
+loginTrigger : Model -> List (Html Msg)
+loginTrigger m = case m.sessionState of
+    Fresh name -> [ p [] 
+                    [ text "You are logged in as "]
+                    , b [] [text name] 
+                    , text "." 
+                  , logoutTrigger m
+                  ]
+        
+
+    Stale -> [ p [] 
+                    [ text "Your session has expired. You need to "
+                    , a [onClick NeedsCreds] [text "log in"]
+                    , text " again."]]
+    None -> [ p [] 
+                    [ text "You can browse publicly listed hosts and times anonymously. However, to claim a time you need to prove your identity by "
+                    , a [onClick NeedsCreds] [text "logging in"]
+                    , text "."]]
+        
 
 
 
@@ -729,7 +806,7 @@ homelink : Html Msg
 homelink =
     a
         [ href "/"
-        ]
+        , class "appName" ]
         [ text "meets" ]
 
 
@@ -873,6 +950,8 @@ content m =
     case m.route of
         HomeRoute _ ->
             []
+
+        HostsRoute _ _ -> []
 
         ScheduleRoute _ _ ->
             weekPointerView m.route m.focus :: times m

@@ -37,8 +37,8 @@ namespace Meets.Services
     public class Broker
     {
         public bool Mock { get; set; }
-        public string Backend { get; set; }
-        public string Frontend { get; set; }
+        public string Authorized { get; set; }
+        public string UnAuthorized { get; set; }
     }
 
     public class MockedHttpContent : HttpContent
@@ -79,7 +79,7 @@ namespace Meets.Services
             HttpClient c
         )
         {
-            c.BaseAddress = new Uri(opts.Value.Backend);
+            c.BaseAddress = new Uri(opts.Value.Authorized);
             c.DefaultRequestHeaders.Accept.Add(
                     new MediaTypeWithQualityHeaderValue("application/json"));
 

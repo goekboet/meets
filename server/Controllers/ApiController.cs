@@ -22,10 +22,10 @@ namespace Meets.Controllers
             p.FindFirstValue("sub");
     }
 
-    public class Appointment
+    public class TimeJson
     {
-        [JsonPropertyName("hostId")]
-        public string HostId { get; set; }
+        [JsonPropertyName("host")]
+        public string Host { get; set; }
 
         [JsonPropertyName("name")]
         public string Name { get; set; }
@@ -37,7 +37,7 @@ namespace Meets.Controllers
         public int Dur { get; set; }
 
         [JsonIgnore]
-        public bool Valid => Guid.TryParse(HostId, out var _) && Dur > 0;
+        public bool Valid => Dur > 0;
     }
 
     [ApiController]
@@ -91,7 +91,7 @@ namespace Meets.Controllers
         [Authorize]
         [HttpPost("api/bookings")]
         public async Task<ActionResult> Book(
-            Appointment appt)
+            TimeJson appt)
         {
             var t = await HttpContext.GetTokenAsync("access_token");
             if (t == null)
@@ -123,7 +123,9 @@ namespace Meets.Controllers
                 res.EnsureSuccessStatusCode();
             }
 
-            return Created($"api/bookings", appt);
+            var json = await res.Content.ReadAsStringAsync();
+            var data = JsonSerializer.Deserialize<TimeJson>(json);
+            return Created($"api/bookings", data);
         }
 
         [Authorize]
