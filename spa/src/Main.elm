@@ -713,85 +713,116 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "meets - public client"
     , body =
-        [ div 
-            [ class "root-view" ] 
-            [ div [ class "component", class "routeLink" ] [ homelink ]
-            , div [ class "component", class "sessionstatus" ] (loginTrigger model)
-            , div [ class "component", class "breadcrumbs" ] (breadcrumbs model)
-            , if isSignedIn model.sessionState 
-                then div [ class "component", class "routeLink"] (bookingsLink model)
-                else text ""
-            , div [ class "component", class "routeLink"] hostsLink
-            ]
+        [ div [ class "root-view" ] (routeToView model)
         ]
     }
 
+-- type Route
+--     = NotFound
+--     | HomeRoute (Maybe WeekParameter)
+--     | HostsRoute (Maybe NameFilterParameter) (Maybe PageParameter)
+--     | ScheduleRoute HostHandle (Maybe WeekParameter)
+--     | BookingsRoute
+
+routeToView : Model -> List (Html Msg)
+routeToView m =
+    case m.route of
+        NotFound -> 
+            [ div [ class "component"] [ p [] [text "not found"]]]
+        HomeRoute p -> 
+            [ div homeLinkStyle homelink 
+            , div sessionStateStyle (sessionstateView m)
+            , if isSignedIn m.sessionState 
+                then div routeLinkStyle (bookingsLink m)
+                else text ""
+            , div routeLinkStyle hostsLink 
+            ]
+        HostsRoute f p -> 
+            [ div homeLinkStyle homelink 
+            , div sessionStateStyle (sessionstateView m)
+            , div routeLinkStyle hostsAnchor
+            ]
+        ScheduleRoute h p -> [] 
+        BookingsRoute -> 
+            [ div homeLinkStyle homelink 
+            , div sessionStateStyle (sessionstateView m)
+            , div routeLinkStyle bookingsAnchor
+            ]
+
+homeLinkStyle : List (Attribute Msg)
+homeLinkStyle = 
+    [ class "large-h"
+    , class "heavy-bkg"
+    ]
+
+routeLinkStyle : List (Attribute Msg)
+routeLinkStyle =
+    [ class "large-h"
+    , class "light-bkg"]
+
+homelink : List (Html Msg)
+homelink = 
+        [ a
+            [ href "/"
+            , class "alt-txt-col" 
+            , class "large-text" ]
+            [ text "meets" ]
+        ]           
+
 hostsLink : List (Html Msg)
 hostsLink =
-    [ a [ href "hosts" ] [ text "hosts"] ]
+    [ a [ href "hosts"
+        , class "main-txt-col" 
+        , class "large-text" ] 
+        [ text "hosts"] ]
+
+hostsAnchor : List (Html Msg)
+hostsAnchor = 
+    [ p [ class "main-txt-col" 
+        , class "large-text"] 
+    [ text "hosts"] ]
 
 bookingsLink : Model -> List (Html Msg)
 bookingsLink m =
-    [ a [ href "/bookings" ] [ text "bookings" ] ]
+    [ a [ href "/bookings"
+        , class "main-txt-col" 
+        , class "large-text" ] 
+    [ text "bookings" ] ]
+
+bookingsAnchor : List (Html Msg)
+bookingsAnchor = 
+    [ p [ class "main-txt-col" 
+        , class "large-text"] 
+    [ text "bookings"] ]
         
-            
-    
+sessionStateStyle : List (Attribute Msg)
+sessionStateStyle =
+    [ class "small-h" 
+    , class "heavy-bkg" ]
 
-breadcrumbs : Model -> List (Html Msg)
-breadcrumbs m =
-    case m.route of
-        HomeRoute _ ->
-            [p [] [text "Home"]]
+sessionStateText : List (Attribute Msg)
+sessionStateText =
+    [ class "alt-txt-col" 
+    , class "small-text" ]
 
-        HostsRoute _ _ ->
-            [p [] 
-                [ a [ href "/"] [ text "Home"]
-                , text " >> "
-                , text "Hosts"]
-                ]
-
-        ScheduleRoute h _ ->
-            [p [] 
-                [ a [ href "/"] [ text "Home"] 
-                , text " >> " 
-                , a [ href "/hosts" ] [ text "Hosts"]
-                , text " >> "
-                , text h
-                ]
-            ]
-
-        BookingsRoute ->
-            [ p [] 
-                [ a [ href "/"] [ text "Home"] 
-                , text " >> " 
-                , text "Bookings"
-                ]
-            ]
-
-        NotFound ->
-            []
-            
---   type Route
---     = NotFound
---     | HomeRoute (Maybe String)
---     | ScheduleRoute String (Maybe String)
---     | BookingsRoute  
-
-loginTrigger : Model -> List (Html Msg)
-loginTrigger m = case m.sessionState of
-    Fresh name -> [ p [] 
+sessionstateView : Model -> List (Html Msg)
+sessionstateView m = case m.sessionState of
+    Fresh name -> [ p 
+                    sessionStateText 
                     [ text "You are logged in as "]
-                    , b [] [text name] 
+                    , b sessionStateText [text name] 
                     , text "." 
                   , logoutTrigger m
                   ]
         
 
-    Stale -> [ p [] 
+    Stale -> [ p    [ class "alt-txt-col" 
+                    , class "small-text" ] 
                     [ text "Your session has expired. You need to "
                     , a [onClick NeedsCreds] [text "log in"]
                     , text " again."]]
-    None -> [ p [] 
+    None -> [ p     [ class "alt-txt-col" 
+                    , class "small-text" ] 
                     [ text "You can browse publicly listed hosts and times anonymously. However, to claim a time you need to prove your identity by "
                     , a [onClick NeedsCreds] [text "logging in"]
                     , text "."]]
@@ -802,12 +833,7 @@ loginTrigger m = case m.sessionState of
 -- Homelink
 
 
-homelink : Html Msg
-homelink =
-    a
-        [ href "/"
-        , class "appName" ]
-        [ text "meets" ]
+
 
 
 
@@ -817,11 +843,14 @@ homelink =
 logoutTrigger : Model -> Html Msg
 logoutTrigger m =
     Html.form
-        [ action (logoutUrl m), method "post" ]
+        [ action (logoutUrl m)
+        , method "post"
+        , class "inline" ]
         [ input
             [ type_ "submit"
             , value "Logout"
-            , class "logoutTrigger"
+            , class "small-text"
+            , class "alt-txt-col"
             ]
             []
         , input
