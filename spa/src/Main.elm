@@ -1,4 +1,4 @@
-port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, host, hostSwitch, hosts, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, times, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
+port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, hostSwitch, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, times, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
 
 import Browser
 --import Browser.Dom as Dom
@@ -44,20 +44,17 @@ toMsg err =
 
 -- Hosts
 
-
 type alias Host =
-    { id : String
+    { handle : String
     , name : String
-    , timezone : String
     }
 
-
+-- {"handle":"sane_fleck","name":"Agustin Caminiti"}
 decodeHost : Decoder Host
 decodeHost =
-    Decode.map3 Host
-        (Decode.field "id" Decode.string)
+    Decode.map2 Host
+        (Decode.field "handle" Decode.string)
         (Decode.field "name" Decode.string)
-        (Decode.field "tz" Decode.string)
 
 
 decodeHosts : Decoder (List Host)
@@ -717,13 +714,6 @@ view model =
         ]
     }
 
--- type Route
---     = NotFound
---     | HomeRoute (Maybe WeekParameter)
---     | HostsRoute (Maybe NameFilterParameter) (Maybe PageParameter)
---     | ScheduleRoute HostHandle (Maybe WeekParameter)
---     | BookingsRoute
-
 routeToView : Model -> List (Html Msg)
 routeToView m =
     case m.route of
@@ -738,10 +728,10 @@ routeToView m =
             , div routeLinkStyle hostsLink 
             ]
         HostsRoute f p -> 
-            [ div homeLinkStyle homelink 
-            , div sessionStateStyle (sessionstateView m)
-            , div routeLinkStyle hostsAnchor
-            ]
+            div homeLinkStyle homelink 
+            :: div sessionStateStyle (sessionstateView m)
+            :: div routeLinkStyle hostsAnchor
+            :: hostsList m
         ScheduleRoute h p -> [] 
         BookingsRoute -> 
             [ div homeLinkStyle homelink 
@@ -828,9 +818,43 @@ sessionstateView m = case m.sessionState of
                     , text "."]]
         
 
+-- type ApiCall a
+--     = Uncalled
+--     | Pending
+--     | Response a
+--     | Error String
 
+-- hosts
 
--- Homelink
+hostListingStyle : List (Attribute Msg)
+hostListingStyle =
+    [ class "large-h"
+    , class "light-bkg"]
+
+hostListing : Host -> Html Msg
+hostListing h =
+    div hostListingStyle [
+        dl [] 
+            [ dt [] [ text "handle" ]
+            , dd [ class "hosthandle" ] [ text h.handle ]
+            , dt [] [ text "name" ] 
+            , dd [ class "hostname" ] [ text h.name] ]
+    ]
+
+hostsList : Model -> List (Html Msg) 
+hostsList m = 
+    case m.hostsCall of
+        Uncalled -> []
+        Pending -> []
+        Response hs -> 
+            [ div 
+                [ class "hostlist" ] 
+                (List.map hostListing hs) ]
+        Error ms -> [div [] [ text ms ]]
+            
+    
+            
+    
 
 
 
@@ -933,41 +957,41 @@ bookigCountView m =
 -- host-list
 
 
-hosts : Model -> Html Msg
-hosts m =
-    case m.hostsCall of
-        Uncalled ->
-            text ""
+-- hosts : Model -> Html Msg
+-- hosts m =
+--     case m.hostsCall of
+--         Uncalled ->
+--             text ""
 
-        Pending ->
-            div [ class "pending" ] [ text "" ]
+--         Pending ->
+--             div [ class "pending" ] [ text "" ]
 
-        Response hs ->
-            ul [ class "schedules-list" ] (List.map (host m) hs)
+--         Response hs ->
+--             ul [ class "schedules-list" ] (List.map (host m) hs)
 
-        Error e ->
-            i [] [ text e ]
+--         Error e ->
+--             i [] [ text e ]
 
 
-host : Model -> Host -> Html Msg
-host m h =
-    let
-        rs r =
-            case r of
-                ScheduleRoute s _ ->
-                    Just s
+-- host : Model -> Host -> Html Msg
+-- host m h =
+--     let
+--         rs r =
+--             case r of
+--                 ScheduleRoute s _ ->
+--                     Just s
 
-                _ ->
-                    Nothing
+--                 _ ->
+--                     Nothing
 
-        selected =
-            Maybe.map ((==) h.id) (rs m.route)
-                |> Maybe.withDefault False
-    in
-    li [ classList [ ( "selected", selected ) ] ]
-        [ a [ href (routeToUrl <| ScheduleRoute h.id Nothing) ] [ text h.name ]
-        , p [] [ text h.timezone ]
-        ]
+--         selected =
+--             Maybe.map ((==) h.handle (rs m.route)
+--                 |> Maybe.withDefault False
+--     in
+--         li [ classList [ ( "selected", selected ) ] ]
+--             [ a [ href (routeToUrl <| ScheduleRoute h.id Nothing) ] [ text h.name ]
+--             , p [] [ text h.timezone ]
+--             ]
 
 
 

@@ -25,12 +25,12 @@ a, p {
 }
 
 .alt-txt-col {
-    color: goldenrod;
+    color: aliceblue;
 }
 
 .large-h {
     padding-top: 2em;
-    padding-bottom: 2em;
+    padding-bottom: 0em;
     padding-left: 2em;
     padding-right: 2em;
     margin: 0;
@@ -46,13 +46,13 @@ a, p {
 
 .large-text {
     font-family: sans-serif;
-    font-size: 8em;
+    font-size: 2em;
     font-weight: bold;
 }
 
 .small-text {
     font-family: sans-serif;
-    font-size: 2.5em;
+    font-size: 1em;
     display: inline;
 }
 
@@ -69,62 +69,40 @@ a, p {
     flex-direction: column;
 }
 
-.component {
-    padding-left: 2em;
-    padding-right: 2em;
-    margin-bottom: 1em;
-    padding-bottom: 1em;
-    border-bottom: solid;
-    border-color: lightsteelblue;
+.root-view div {
+    width: 100%;
 }
 
-.routeLink a {
+.root-view div:last-child {
+    padding-bottom: 0;
+}
+
+.root-view div:first-child {
+    padding-bottom: 0;
+}
+
+.hostlist {
+    overflow: scroll;
+}
+
+.hostlist dl {
+    margin: 0;
+}
+
+.hostlist dt {
+    display: none;
+}
+
+.hosthandle {
     font-family: sans-serif;
-    font-size: 8em;
-    text-decoration: underline;
-    font-weight: bold;
+    font-family: sans-serif;
+    margin: 0;
     color: steelblue;
 }
 
-.breadcrumbs p {
-    font-size: 2.5em;
+.hostname {
+    font-family: sans-serif;
     margin: 0;
-    padding: 0;
-    font-family: sans-serif;
-    color: goldenrod;
+    color: steelblue;
+    font-size: 2em;
 }
-
-.sessionstatus p {
-    font-family: sans-serif;
-    font-size: 2.5em;
-    color: goldenrod;
-    margin: 0;
-    display: inline;
-}
-
-.sessionstatus a {
-    font-weight: bold;
-    text-decoration: underline;
-}
-
-.sessionstatus b {
-    font-family: sans-serif;
-    font-size: 2.5em;
-    color: goldenrod;
-    margin: 0;
-    /* padding-left: 0.25em; */
-    display: inline;
-}
-
-.sessionstatus form {
-    display: inline;
-}
-
-.sessionstatus input {
-    font-family: sans-serif;
-  font-size: 2.5em;
-  color: goldenrod;
-  margin: 0;
-  text-decoration: underline;
-}
-
