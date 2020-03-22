@@ -1,7 +1,9 @@
-port module Main exposing (ApiBaseUrl, ApiCall(..), Appointment, End, Flags, Host, HostId, HostRef, Minutes, Model, Msg(..), Oclock, Route(..), SessionState(..), Start, UnixTs, Week, WeekPointer, Window, addWeekFocusQuery, bookigCountView, bookingsCount, bookingsView, callBook, callBookings, callTimes, callUnbook, content, decodeAppointment, decodeAppointments, decodeHost, decodeHosts, decodeTimesWindow, decodeWeekpointer, duration, encodeAppointment, encodeWeek, getBookingsClock, getTimesClock, getWeekpointer, gotBookingsClock, gotTimesClock, gotWeekpointer, homelink, hostSwitch, init, isSignedIn, loadHosts, logoutTrigger, logoutUrl, main, myBookings, myBookingsListing, mybookingsUrl, refreshStaleWeekpointer, route, routeHostId, routeToUrl, sessionControl, subscriptions, times, toMsg, toRoute, unBookBtn, update, view, weekPointerView, weekpointerStaleness)
+port module Main exposing (main)
 
+import Model exposing (..)
+import Apicall exposing (..)
+import Route exposing (..)
 import Browser
---import Browser.Dom as Dom
 import Browser.Navigation as Nav
 import Debounce as Debounce exposing (Debounce)
 import Html exposing (..)
@@ -12,134 +14,16 @@ import Json.Decode as Decode exposing (Decoder, field, string)
 import Json.Encode as Encode exposing (Value)
 import Url
 import Url.Builder as UrlB
-import Url.Parser as UrlP exposing ((</>), (<?>))
-import Url.Parser.Query as Query
 import Dict as Dict exposing (Dict)
 
-
-
--- Times
--- Error
-
-
-toMsg : Http.Error -> String
-toMsg err =
-    case err of
-        Http.BadUrl s ->
-            "Invalid url: " ++ s
-
-        Http.Timeout ->
-            "Request timed out."
-
-        Http.NetworkError ->
-            "Network error."
-
-        Http.BadStatus s ->
-            "Bad status: " ++ String.fromInt s
-
-        Http.BadBody s ->
-            "Bad body: " ++ s
-
-
-
--- Hosts
-
-type alias Host =
-    { handle : String
-    , name : String
-    }
-
--- {"handle":"sane_fleck","name":"Agustin Caminiti"}
-decodeHost : Decoder Host
-decodeHost =
-    Decode.map2 Host
-        (Decode.field "handle" Decode.string)
-        (Decode.field "name" Decode.string)
-
-
-decodeHosts : Decoder (List Host)
-decodeHosts =
-    Decode.list decodeHost
-
-
-
 -- Appointment
-
-
-type alias HostId =
-    String
-
-
-type alias HostRef =
-    String
-
-
-type alias UnixTs =
-    Int
-
-
-type alias Oclock =
-    String
-
-
-type alias Minutes =
-    Int
-
-
-type alias Appointment =
-    { hostId : HostId
-    , hostRef : HostRef
-    , start : UnixTs
-    , oclock : Maybe Oclock
-    , dur : Minutes
-    }
-
-
 port gotTimesClock : (Value -> msg) -> Sub msg
-
-
 port gotBookingsClock : (Value -> msg) -> Sub msg
-
-
-decodeAppointment : Decoder Appointment
-decodeAppointment =
-    Decode.map5 Appointment
-        (Decode.field "hostId" Decode.string)
-        (Decode.field "name" Decode.string)
-        (Decode.field "start" Decode.int)
-        (Decode.maybe (Decode.field "oclock" Decode.string))
-        (Decode.field "dur" Decode.int)
-
-
-decodeAppointments : Decoder (List Appointment)
-decodeAppointments =
-    Decode.list decodeAppointment
-
-
 port getTimesClock : Value -> Cmd a
-
-
 port getBookingsClock : Value -> Cmd a
 
 
-encodeAppointment : Appointment -> Value
-encodeAppointment m =
-    Encode.object
-        [ ( "hostId", Encode.string m.hostId )
-        , ( "name", Encode.string m.hostRef )
-        , ( "start", Encode.int m.start )
-        , ( "oclock"
-          , case m.oclock of
-                Just c ->
-                    Encode.string c
-
-                _ ->
-                    Encode.null
-          )
-        , ( "dur", Encode.int m.dur )
-        ]
-
-
+-- sessionstate
 type SessionState
     = Fresh String
     | Stale
@@ -155,35 +39,7 @@ isSignedIn s =
         _ ->
             False
 
--- Route
-
-type alias WeekParameter = String
-type alias HostHandle = String
-type alias NameFilterParameter = String
-type alias PageParameter = String
-
-type Route
-    = NotFound
-    | HomeRoute (Maybe WeekParameter)
-    | HostsRoute (Maybe NameFilterParameter) (Maybe PageParameter)
-    | ScheduleRoute HostHandle (Maybe WeekParameter)
-    | BookingsRoute
-
-
-toRoute : Url.Url -> Route
-toRoute url =
-    Maybe.withDefault NotFound <| UrlP.parse route url
-
-
-route =
-    UrlP.oneOf
-        [ UrlP.map HomeRoute (UrlP.top <?> Query.string "week")
-        , UrlP.map HostsRoute (UrlP.s "hosts" <?> Query.string "notBeforeName" <?> Query.string "p" )
-        , UrlP.map ScheduleRoute (UrlP.s "hosts" </> UrlP.string <?> Query.string "week")
-        , UrlP.map BookingsRoute (UrlP.s "bookings")
-        ]
-
-
+-- Routing
 logoutUrl : Model -> String
 logoutUrl m =
     UrlB.absolute [ "logout" ] [ UrlB.string "sparoute" (routeToUrl m.route) ]
@@ -211,34 +67,7 @@ routeHostId r =
 
 
 -- week-pointer
-
-
-type alias Week =
-    String
-
-
-type alias Start =
-    Int
-
-
-type alias End =
-    Int
-
-
-type alias Window =
-    ( Start, End )
-
-
-type alias WeekPointer =
-    { prev : Week
-    , curr : Week
-    , next : Week
-    , window : Window
-    }
-
-
 port getWeekpointer : Value -> Cmd a
-
 
 encodeWeek : Week -> Value
 encodeWeek w =
@@ -252,7 +81,6 @@ decodeTimesWindow : Decoder Window
 decodeTimesWindow =
     Decode.map2 Tuple.pair (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
 
-
 decodeWeekpointer : Decoder WeekPointer
 decodeWeekpointer =
     Decode.map4
@@ -262,108 +90,10 @@ decodeWeekpointer =
         (Decode.field "next" Decode.string)
         (Decode.field "window" decodeTimesWindow)
 
-
-
--- Api
-
-
-type ApiCall a
-    = Uncalled
-    | Pending
-    | Response a
-    | Error String
-
-
-type alias ApiBaseUrl =
-    String
-
-
-
--- Host (Cross origin - considered public)
--- /hosts
-
-
-loadHosts : Route -> ApiBaseUrl -> Cmd Msg
-loadHosts r m =
-    case r of
-        NotFound ->
-            Cmd.none
-
-        _ ->
-            Http.get
-                { url = UrlB.crossOrigin m [ "hosts" ] []
-                , expect = Http.expectJson HostsFetched decodeHosts
-                }
-
-
-
--- host/{hostId}/times?from={from}&to={to}
-
-
-callTimes : ApiBaseUrl -> Window -> HostId -> Cmd Msg
-callTimes base ( from, to ) hostId =
-    Http.get
-        { url =
-            UrlB.crossOrigin base
-                [ "hosts", hostId, "times" ]
-                [ UrlB.int "from" from
-                , UrlB.int "to" to
-                ]
-        , expect = Http.expectJson AppointmentsFetched decodeAppointments
-        }
-
-
-
--- POST /bookings
-
-
-callBook : Appointment -> Cmd Msg
-callBook m =
-  let
-      ctor = MeetBooked << Tuple.pair m.start
-  in
-    Http.post
-        { url = UrlB.absolute [ "api", "bookings" ] []
-        , body = Http.jsonBody <| encodeAppointment m
-        , expect = Http.expectJson ctor decodeAppointment
-        }
-
-
-
--- DELETE /bookings
-
-
-callUnbook : Int -> Cmd Msg
-callUnbook r =
-    Http.request
-        { method = "DELETE"
-        , headers = []
-        , url = UrlB.absolute [ "api", "bookings", String.fromInt r ] []
-        , body = Http.emptyBody
-        , expect = Http.expectWhatever (Unbooked << Tuple.pair r)
-        , timeout = Nothing
-        , tracker = Nothing
-        }
-
-
-
--- /bookings
-
-
-callBookings : Cmd Msg
-callBookings =
-    Http.get
-        { url = UrlB.absolute [ "api", "bookings" ] []
-        , expect = Http.expectJson GotBookings decodeAppointments
-        }
-
-type alias BookCommandRecord = ( UnixTs, ApiCall Appointment ) 
-type alias UnbookCommandRecord = ( UnixTs, ApiCall () )
+-- type alias BookCommandRecord = ( UnixTs, ApiCall Appointment ) 
+-- type alias UnbookCommandRecord = ( UnixTs, ApiCall () )
 type alias BookCommandHistory = Dict UnixTs (ApiCall Appointment) 
 type alias UnbookCommandHistory = Dict UnixTs (ApiCall ())
-
--- MODEL
-
 
 type alias Model =
     { key : Nav.Key
@@ -389,8 +119,6 @@ type alias Flags =
     }
 
 -- MAIN
-
-
 main : Program Flags Model Msg
 main =
     Browser.application
@@ -443,25 +171,6 @@ init flags url key =
 
 
 -- UPDATE
-
-
-type Msg
-    = LinkClicked Browser.UrlRequest
-    | UrlChanged Url.Url
-    | WeekpointerDebounced Debounce.Msg
-    | HostsFetched (Result Http.Error (List Host))
-    | GotWeekpointer (Result Decode.Error WeekPointer)
-    | AppointmentsFetched (Result Http.Error (List Appointment))
-    | GotTimesClock (Result Decode.Error (List Appointment))
-    | GotBookingsClock (Result Decode.Error (List Appointment))
-    | NeedsCreds
-    | Book Appointment
-    | MeetBooked (UnixTs, Result Http.Error Appointment)
-    | Unbook Int
-    | Unbooked (UnixTs, (Result Http.Error ()))
-    | GotBookings (Result Http.Error (List Appointment))
-    | NoOp
-
 
 hostSwitch : Url.Url -> Model -> Maybe HostId
 hostSwitch url model =
@@ -817,13 +526,6 @@ sessionstateView m = case m.sessionState of
                     , a [onClick NeedsCreds] [text "logging in"]
                     , text "."]]
         
-
--- type ApiCall a
---     = Uncalled
---     | Pending
---     | Response a
---     | Error String
-
 -- hosts
 
 hostListingStyle : List (Attribute Msg)

@@ -1,5 +1,6 @@
 #! /bin/bash
 
+set -e
 DEST=${1:-dist}
 
 SECONDS=0
@@ -7,6 +8,8 @@ echo "building to $DEST"
 echo "Transpiling to js."
 elm make src/Main.elm --optimize --output="${DEST}/main.js"
 echo "Output $(wc -c ${DEST}/main.js) bytes"
+
+
 
 SECONDS=0
 echo "Minifying elm..."
