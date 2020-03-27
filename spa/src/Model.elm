@@ -11,6 +11,7 @@ type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
     | WeekpointerDebounced Debounce.Msg
+    | FetchHosts (Maybe String) (Maybe Int)
     | HostsFetched (Result Http.Error (List Host))
     | GotWeekpointer (Result Decode.Error WeekPointer)
     | AppointmentsFetched (Result Http.Error (List Appointment))

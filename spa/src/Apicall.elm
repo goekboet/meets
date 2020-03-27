@@ -1,6 +1,6 @@
 module Apicall exposing (
     toMsg,
-    loadHosts, 
+    callHosts, 
     callUnbook, 
     callBook, 
     callBookings, 
@@ -23,17 +23,16 @@ type ApiCall a
 type alias ApiBaseUrl =
     String
 
-loadHosts : Route -> ApiBaseUrl -> Cmd Msg
-loadHosts r m =
-    case r of
-        NotFound ->
-            Cmd.none
-
-        _ ->
-            Http.get
-                { url = UrlB.crossOrigin m [ "hosts" ] []
-                , expect = Http.expectJson HostsFetched decodeHosts
-                }
+callHosts : ApiBaseUrl -> Maybe (String) -> (Maybe Int) -> Cmd Msg
+callHosts base filter p =
+    let
+        f = Maybe.map (List.singleton << UrlB.string "notBeforeName") filter
+            |> Maybe.withDefault []
+    in
+    Http.get
+        { url = UrlB.crossOrigin base [ "hosts" ] (List.concat [ f , [ UrlB.int "p" (Maybe.withDefault 0 p) ]])
+        , expect = Http.expectJson HostsFetched decodeHosts
+        }
 
 
 

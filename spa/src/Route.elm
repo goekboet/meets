@@ -7,12 +7,12 @@ import Url.Parser.Query as Query
 type alias WeekParameter = String
 type alias HostHandle = String
 type alias NameFilterParameter = String
-type alias PageParameter = String
+
 
 type Route
     = NotFound
     | HomeRoute (Maybe WeekParameter)
-    | HostsRoute (Maybe NameFilterParameter) (Maybe PageParameter)
+    | HostsRoute (Maybe NameFilterParameter) 
     | ScheduleRoute HostHandle (Maybe WeekParameter)
     | BookingsRoute
 
@@ -26,7 +26,7 @@ route : Parser (Route -> a) a
 route =
     UrlP.oneOf
         [ UrlP.map HomeRoute (UrlP.top <?> Query.string "week")
-        , UrlP.map HostsRoute (UrlP.s "hosts" <?> Query.string "notBeforeName" <?> Query.string "p" )
+        , UrlP.map HostsRoute (UrlP.s "hosts" <?> Query.string "notBeforeName" )
         , UrlP.map ScheduleRoute (UrlP.s "hosts" </> UrlP.string <?> Query.string "week")
         , UrlP.map BookingsRoute (UrlP.s "bookings")
         ]
