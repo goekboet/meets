@@ -8,11 +8,13 @@ import Json.Decode as Decode exposing (Error, Decoder)
 import Json.Encode as Encode exposing (Value)
 
 type Msg
-    = LinkClicked Browser.UrlRequest
+    = LinkClicked UrlRequest
     | UrlChanged Url.Url
     | WeekpointerDebounced Debounce.Msg
     | FetchHosts (Maybe String) (Maybe Int)
     | HostsFetched (Result Http.Error (List Host))
+    | HostsFilterChange String
+    | HostsFilterChangeDebounced Debounce.Msg
     | GotWeekpointer (Result Decode.Error WeekPointer)
     | AppointmentsFetched (Result Http.Error (List Appointment))
     | GotTimesClock (Result Decode.Error (List Appointment))

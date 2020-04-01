@@ -127,8 +127,12 @@ type alias UnbookCommandHistory =
 
 type alias HostsData =
     { calls : List (ApiCall (List Host))
-    , nextPage : Maybe Int
+    , nextPage : Int
+    , filter : Debounce String
     }
+
+isEmpty : HostsData -> Bool
+isEmpty h = h.nextPage == 0  
 
 requestData : HostsData -> HostsData
 requestData hs =
@@ -142,16 +146,42 @@ receiveData call hs =
             Response h -> 
                 if List.length h == 100 then
                     { calls = Uncalled :: call :: List.drop 1 hs.calls
-                    , nextPage = Maybe.map ((+) 1) hs.nextPage
+                    , nextPage = hs.nextPage + 1
+                    , filter = hs.filter 
                     }
                 else
-                    { calls = Uncalled :: call :: List.drop 1 hs.calls
-                    , nextPage = Nothing
+                    { calls = call :: List.drop 1 hs.calls
+                    , nextPage = 0
+                    , filter = hs.filter
                     }
-            _ ->    { calls = Uncalled :: call :: List.drop 1 hs.calls
-                    , nextPage = Nothing
+            _ ->    { calls = call :: List.drop 1 hs.calls
+                    , nextPage = 0
+                    , filter = hs.filter
                     }
-    
+
+debounceHostsfilterLater1s : Debounce.Config Msg
+debounceHostsfilterLater1s =
+    { strategy = Debounce.later 1000
+    , transform = HostsFilterChangeDebounced
+    } 
+
+setFilterParameter : Model -> String -> Cmd Msg 
+setFilterParameter m f =
+    case m.route of
+        HostsRoute _ -> 
+            let
+                query = UrlB.string "notBeforeName" f
+                url = UrlB.absolute [ "hosts" ] [ query ]
+            in
+                Nav.pushUrl m.key url
+            
+        _           -> Cmd.none
+
+getFilterParameter : Route -> (Maybe String)
+getFilterParameter r =
+    case r of
+        HostsRoute f -> f
+        _            -> Nothing
 
 type alias Model =
     { key : Nav.Key
@@ -215,7 +245,7 @@ init flags url key =
       , focus = flags.focus
       , lastwptr = Debounce.init
       , apiBaseUrl = flags.apiBaseUrl
-      , hostsdata = { calls = [], nextPage = Just 0 }
+      , hostsdata = { calls = [ Pending ], nextPage = 0, filter = Debounce.init }
       , timesCall =
             Maybe.map (always Pending) hostId
                 |> Maybe.withDefault Uncalled
@@ -304,13 +334,9 @@ update msg model =
         LinkClicked urlRequest ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( { model
-                        | route = toRoute url
-                      }
+                    ( model
                     , Cmd.batch
                         [ Nav.pushUrl model.key (Url.toString url)
-                        , Maybe.map (callTimes model.apiBaseUrl model.focus.window) (hostSwitch url model)
-                            |> Maybe.withDefault Cmd.none
                         ]
                     )
 
@@ -318,12 +344,16 @@ update msg model =
                     ( model, Nav.load href )
 
         UrlChanged url ->
-            ( model
+            ( { model | route = toRoute url }
             , Cmd.batch
                 [ refreshStaleWeekpointer model
-                , case model.route of
+                , case toRoute url of
                     BookingsRoute ->
                         callBookings
+                    HostsRoute filter ->
+                        if isEmpty model.hostsdata
+                        then callHosts model.apiBaseUrl filter Nothing
+                        else Cmd.none
 
                     _ ->
                         Cmd.none
@@ -362,10 +392,44 @@ update msg model =
                         model.lastwptr
             in
             ( { model | lastwptr = d }, c )
+        
+        HostsFilterChange f ->
+            let
+                ( d, c ) =
+                    Debounce.push debounceHostsfilterLater1s f model.hostsdata.filter
+                hostsdata_ = 
+                    { calls = model.hostsdata.calls
+                    , nextPage = model.hostsdata.nextPage
+                    , filter = d 
+                    }
+            in
+                ( { model | hostsdata = hostsdata_ }
+                , c
+                )
+
+        HostsFilterChangeDebounced f ->
+            let
+                ( d, c ) =
+                    Debounce.update
+                        debounceHostsfilterLater1s
+                        (Debounce.takeLast (setFilterParameter model))
+                        f
+                        model.hostsdata.filter
+
+                hostsdata_ = 
+                    { calls = [ Pending ]
+                    , nextPage = 0
+                    , filter = d 
+                    }
+            in
+                ( { model |  hostsdata = hostsdata_ }
+                , c
+                )
 
         FetchHosts filter page ->
             ( { model | hostsdata = requestData model.hostsdata }
             , callHosts model.apiBaseUrl filter page )
+
 
         HostsFetched (Err (Http.BadStatus 401)) ->
             ( { model | sessionState = Stale }
@@ -538,7 +602,8 @@ routeToView m =
             div homeLinkStyle homelink
                 :: div sessionStateStyle (sessionstateView m)
                 :: div routeLinkStyle hostsAnchor
-                :: hostsDataView m.hostsdata
+                :: div hostsFilterStyle hostsFilter
+                :: hostsDataView m.route m.hostsdata
 
         ScheduleRoute h p ->
             []
@@ -552,15 +617,16 @@ routeToView m =
 
 homeLinkStyle : List (Attribute Msg)
 homeLinkStyle =
-    [ class "large-h"
+    [ class "pt-1em"
     , class "heavy-bkg"
     ]
 
 
 routeLinkStyle : List (Attribute Msg)
 routeLinkStyle =
-    [ class "large-h"
+    [ class "pt-b-2em"
     , class "light-bkg"
+    , class "light-sep"
     ]
 
 
@@ -574,6 +640,24 @@ homelink =
         [ text "meets" ]
     ]
 
+hostsFilterStyle : List (Attribute Msg)
+hostsFilterStyle = 
+    [ class "pt-b-2em"
+    , class "light-bkg"
+    , class "light-sep"
+    , class "hostsfilter"]
+
+hostsFilter : List (Html Msg)
+hostsFilter = 
+    [ label [ Html.Attributes.for "hostsfilter" ] [ text "Search:" ] 
+    , input 
+        [ Html.Attributes.type_ "text"
+        , id "hostsfilter"
+        , Html.Attributes.name "hostsfilter"
+        , Html.Events.onInput HostsFilterChange
+        ] 
+        []
+    ]
 
 hostsLink : List (Html Msg)
 hostsLink =
@@ -581,6 +665,7 @@ hostsLink =
         [ href "hosts"
         , class "main-txt-col"
         , class "large-text"
+        , class "routeLink"
         ]
         [ text "hosts" ]
     ]
@@ -602,6 +687,7 @@ bookingsLink m =
         [ href "/bookings"
         , class "main-txt-col"
         , class "large-text"
+        , class "routeLink"
         ]
         [ text "bookings" ]
     ]
@@ -619,7 +705,7 @@ bookingsAnchor =
 
 sessionStateStyle : List (Attribute Msg)
 sessionStateStyle =
-    [ class "small-h"
+    [ class "pt-b-05em"
     , class "heavy-bkg"
     ]
 
@@ -672,7 +758,7 @@ sessionstateView m =
 
 hostListingStyle : List (Attribute Msg)
 hostListingStyle =
-    [ class "large-h"
+    [ class "pt-b-2em"
     , class "light-bkg"
     ]
 
@@ -689,29 +775,47 @@ hostListing h =
         ]
 
 
-hostsDataView : HostsData -> List (Html Msg)
-hostsDataView data =
+hostsDataView : Route -> HostsData -> List (Html Msg)
+hostsDataView r data =
     [ div 
         [ id "scrollArea", class "hostlist" ] 
-        (List.concatMap (hostsCall data.nextPage) (List.reverse data.calls)) ]
+        (List.concatMap (hostsCall (getFilterParameter r) data.nextPage) (List.reverse data.calls)) ]
 
 
-hostsCall : (Maybe Int) -> ApiCall (List Host)  -> List (Html Msg)
-hostsCall nextP call =
+hostsCall : (Maybe String) -> Int -> ApiCall (List Host)  -> List (Html Msg)
+hostsCall filter nextP call =
     case call of
         Uncalled -> 
-            if Maybe.map (always True) nextP |> Maybe.withDefault False
-            then [ div [ onClick (FetchHosts Nothing nextP) ] [ text "uncalled" ] ]
-            else []
+            [ div [ class "hostlistAction" ] 
+                [ button 
+                    [ onClick (FetchHosts filter (Just nextP))
+                    , class "centered"
+                    , class "light-button" ] 
+                    [ text "Load more..."] 
+                ] 
+            ]
 
         Pending ->
-            [ div [] [ text "pending" ] ]
+            [ div [ class "hostlistAction" ]
+                [ div 
+                    [ id "loading"
+                    , class "centered" ] 
+                    [] 
+                ] 
+            ]
 
         Response hs ->
             List.map hostListing hs
 
         Error ms ->
-            [ div [] [ text ms ] ]
+            [ div [ class "error"] 
+            [ i [ class "fas fa-exclamation-triangle" ] []
+            , h4 [] [ text "An error occured."] 
+            , p [] 
+                [ text "You can always "
+                , a [ onClick (FetchHosts Nothing (Just nextP)) ] [ text "try again."] ]
+            ] 
+            ]
 
 
 
@@ -724,14 +828,12 @@ logoutTrigger m =
         [ action (logoutUrl m)
         , method "post"
         , class "inline"
+        , class "logoutTrigger"
         ]
-        [ input
+        [ button
             [ type_ "submit"
-            , value "Logout"
-            , class "small-text"
-            , class "alt-txt-col"
             ]
-            []
+            [ i [ class "fas", class "fa-sign-out-alt", class "alt-txt-col" ] [] ]
         , input
             [ type_ "hidden"
             , name "__RequestVerificationToken"
@@ -807,38 +909,6 @@ bookigCountView m =
         Error _ ->
             text "!"
 
-
-
--- host-list
--- hosts : Model -> Html Msg
--- hosts m =
---     case m.hostsCall of
---         Uncalled ->
---             text ""
---         Pending ->
---             div [ class "pending" ] [ text "" ]
---         Response hs ->
---             ul [ class "schedules-list" ] (List.map (host m) hs)
---         Error e ->
---             i [] [ text e ]
--- host : Model -> Host -> Html Msg
--- host m h =
---     let
---         rs r =
---             case r of
---                 ScheduleRoute s _ ->
---                     Just s
---                 _ ->
---                     Nothing
---         selected =
---             Maybe.map ((==) h.handle (rs m.route)
---                 |> Maybe.withDefault False
---     in
---         li [ classList [ ( "selected", selected ) ] ]
---             [ a [ href (routeToUrl <| ScheduleRoute h.id Nothing) ] [ text h.name ]
---             , p [] [ text h.timezone ]
---             ]
--- Content view
 
 
 content : Model -> List (Html Msg)
