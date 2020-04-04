@@ -13,8 +13,8 @@ type Msg
     | WeekpointerDebounced Debounce.Msg
     | FetchHosts (Maybe String) (Maybe Int)
     | HostsFetched (Result Http.Error (List Host))
-    | HostsFilterChange String
-    | HostsFilterChangeDebounced Debounce.Msg
+    | HostsFilterInput String
+    | HostsFilterQuery
     | GotWeekpointer (Result Decode.Error WeekPointer)
     | AppointmentsFetched (Result Http.Error (List Appointment))
     | GotTimesClock (Result Decode.Error (List Appointment))

@@ -15,6 +15,8 @@ import Model exposing (..)
 import Route exposing (..)
 import Url
 import Url.Builder as UrlB
+import SessionState as Session exposing (SessionState, sessionstateView)
+import HostsListing as Hosts exposing (HostsData, receiveData)
 
 
 
@@ -32,44 +34,6 @@ port getTimesClock : Value -> Cmd a
 
 port getBookingsClock : Value -> Cmd a
 
-
-
--- sessionstate
-
-
-type SessionState
-    = Fresh String
-    | Stale
-    | None
-
-
-isSignedIn : SessionState -> Bool
-isSignedIn s =
-    case s of
-        Fresh _ ->
-            True
-
-        _ ->
-            False
-
-
-
--- Routing
-
-
-logoutUrl : Model -> String
-logoutUrl m =
-    UrlB.absolute [ "logout" ] [ UrlB.string "sparoute" (routeToUrl m.route) ]
-
-
-routeToUrl : Route -> String
-routeToUrl r =
-    case r of
-        ScheduleRoute s w ->
-            UrlB.absolute [ "hosts", s ] (Maybe.map (\x -> [ UrlB.string "week" x ]) w |> Maybe.withDefault [])
-
-        _ ->
-            UrlB.absolute [] []
 
 
 routeHostId : Route -> Maybe HostId
@@ -125,63 +89,9 @@ type alias UnbookCommandHistory =
     Dict UnixTs (ApiCall ())
 
 
-type alias HostsData =
-    { calls : List (ApiCall (List Host))
-    , nextPage : Int
-    , filter : Debounce String
-    }
 
-isEmpty : HostsData -> Bool
-isEmpty h = h.nextPage == 0  
 
-requestData : HostsData -> HostsData
-requestData hs =
-    case hs.calls of
-        Uncalled :: cs -> { hs | calls = Pending :: cs } 
-        _ -> hs  
 
-receiveData : ApiCall (List Host) -> HostsData -> HostsData
-receiveData call hs =
-    case call of
-            Response h -> 
-                if List.length h == 100 then
-                    { calls = Uncalled :: call :: List.drop 1 hs.calls
-                    , nextPage = hs.nextPage + 1
-                    , filter = hs.filter 
-                    }
-                else
-                    { calls = call :: List.drop 1 hs.calls
-                    , nextPage = 0
-                    , filter = hs.filter
-                    }
-            _ ->    { calls = call :: List.drop 1 hs.calls
-                    , nextPage = 0
-                    , filter = hs.filter
-                    }
-
-debounceHostsfilterLater1s : Debounce.Config Msg
-debounceHostsfilterLater1s =
-    { strategy = Debounce.later 1000
-    , transform = HostsFilterChangeDebounced
-    } 
-
-setFilterParameter : Model -> String -> Cmd Msg 
-setFilterParameter m f =
-    case m.route of
-        HostsRoute _ -> 
-            let
-                query = UrlB.string "notBeforeName" f
-                url = UrlB.absolute [ "hosts" ] [ query ]
-            in
-                Nav.pushUrl m.key url
-            
-        _           -> Cmd.none
-
-getFilterParameter : Route -> (Maybe String)
-getFilterParameter r =
-    case r of
-        HostsRoute f -> f
-        _            -> Nothing
 
 type alias Model =
     { key : Nav.Key
@@ -239,13 +149,11 @@ init flags url key =
     ( { key = key
       , csrf = flags.csrf
       , route = toRoute url
-      , sessionState =
-            Maybe.map Fresh flags.name
-                |> Maybe.withDefault None
+      , sessionState = Session.init flags.name
       , focus = flags.focus
       , lastwptr = Debounce.init
       , apiBaseUrl = flags.apiBaseUrl
-      , hostsdata = { calls = [ Pending ], nextPage = 0, filter = Debounce.init }
+      , hostsdata = { calls = [ Pending ], nextPage = 0, filter = "" }
       , timesCall =
             Maybe.map (always Pending) hostId
                 |> Maybe.withDefault Uncalled
@@ -351,7 +259,7 @@ update msg model =
                     BookingsRoute ->
                         callBookings
                     HostsRoute filter ->
-                        if isEmpty model.hostsdata
+                        if Hosts.isEmpty model.hostsdata
                         then callHosts model.apiBaseUrl filter Nothing
                         else Cmd.none
 
@@ -393,46 +301,23 @@ update msg model =
             in
             ( { model | lastwptr = d }, c )
         
-        HostsFilterChange f ->
-            let
-                ( d, c ) =
-                    Debounce.push debounceHostsfilterLater1s f model.hostsdata.filter
-                hostsdata_ = 
-                    { calls = model.hostsdata.calls
-                    , nextPage = model.hostsdata.nextPage
-                    , filter = d 
-                    }
-            in
-                ( { model | hostsdata = hostsdata_ }
-                , c
-                )
+        HostsFilterInput f ->
+            ( { model | hostsdata = Hosts.recordHostFilterInput model.hostsdata f }
+            , Cmd.none
+            )
 
-        HostsFilterChangeDebounced f ->
-            let
-                ( d, c ) =
-                    Debounce.update
-                        debounceHostsfilterLater1s
-                        (Debounce.takeLast (setFilterParameter model))
-                        f
-                        model.hostsdata.filter
-
-                hostsdata_ = 
-                    { calls = [ Pending ]
-                    , nextPage = 0
-                    , filter = d 
-                    }
-            in
-                ( { model |  hostsdata = hostsdata_ }
-                , c
-                )
+        HostsFilterQuery ->
+            ( { model | hostsdata = Hosts.recordFilterQuery model.hostsdata }
+            , Route.setFilterParameter model.key model.route model.hostsdata.filter
+            )
 
         FetchHosts filter page ->
-            ( { model | hostsdata = requestData model.hostsdata }
+            ( { model | hostsdata = Hosts.requestData model.hostsdata }
             , callHosts model.apiBaseUrl filter page )
 
 
         HostsFetched (Err (Http.BadStatus 401)) ->
-            ( { model | sessionState = Stale }
+            ( { model | sessionState = Session.recordStaleness }
             , Cmd.none
             )
 
@@ -452,7 +337,7 @@ update msg model =
 
         AppointmentsFetched (Err (Http.BadStatus 401)) ->
             ( { model
-                | sessionState = Stale
+                | sessionState = Session.recordStaleness
               }
             , Cmd.none
             )
@@ -497,7 +382,7 @@ update msg model =
 
         MeetBooked ( ts, Err (Http.BadStatus 401) ) ->
             ( { model
-                | sessionState = Stale
+                | sessionState = Session.recordStaleness
                 , bookCallHistory = Dict.insert ts (Error "Need to re-login.") model.bookCallHistory
               }
             , Cmd.none
@@ -519,7 +404,7 @@ update msg model =
 
         Unbooked ( ts, Err (Http.BadStatus 401) ) ->
             ( { model
-                | sessionState = Stale
+                | sessionState = Session.recordStaleness
                 , unbookCallHistory = Dict.insert ts (Error "Need to login") model.unbookCallHistory
               }
             , Cmd.none
@@ -548,7 +433,7 @@ update msg model =
             )
 
         GotBookings (Err (Http.BadStatus 401)) ->
-            ( { model | sessionState = Stale }
+            ( { model | sessionState = Session.recordStaleness }
             , Cmd.none
             )
 
@@ -589,8 +474,8 @@ routeToView m =
 
         HomeRoute p ->
             [ div homeLinkStyle homelink
-            , div sessionStateStyle (sessionstateView m)
-            , if isSignedIn m.sessionState then
+            , div sessionStateStyle (sessionstateView m.route m.csrf m.sessionState)
+            , if Session.isSignedIn m.sessionState then
                 div routeLinkStyle (bookingsLink m)
 
               else
@@ -600,17 +485,17 @@ routeToView m =
 
         HostsRoute f ->
             div homeLinkStyle homelink
-                :: div sessionStateStyle (sessionstateView m)
+                :: div sessionStateStyle (sessionstateView m.route m.csrf m.sessionState)
                 :: div routeLinkStyle hostsAnchor
-                :: div hostsFilterStyle hostsFilter
-                :: hostsDataView m.route m.hostsdata
+                :: div Hosts.hostsFilterStyle Hosts.hostsFilter
+                :: Hosts.hostsDataView m.route m.hostsdata
 
         ScheduleRoute h p ->
             []
 
         BookingsRoute ->
             [ div homeLinkStyle homelink
-            , div sessionStateStyle (sessionstateView m)
+            , div sessionStateStyle (sessionstateView m.route m.csrf m.sessionState)
             , div routeLinkStyle bookingsAnchor
             ]
 
@@ -640,24 +525,7 @@ homelink =
         [ text "meets" ]
     ]
 
-hostsFilterStyle : List (Attribute Msg)
-hostsFilterStyle = 
-    [ class "pt-b-2em"
-    , class "light-bkg"
-    , class "light-sep"
-    , class "hostsfilter"]
 
-hostsFilter : List (Html Msg)
-hostsFilter = 
-    [ label [ Html.Attributes.for "hostsfilter" ] [ text "Search:" ] 
-    , input 
-        [ Html.Attributes.type_ "text"
-        , id "hostsfilter"
-        , Html.Attributes.name "hostsfilter"
-        , Html.Events.onInput HostsFilterChange
-        ] 
-        []
-    ]
 
 hostsLink : List (Html Msg)
 hostsLink =
@@ -710,151 +578,44 @@ sessionStateStyle =
     ]
 
 
-sessionStateText : List (Attribute Msg)
-sessionStateText =
-    [ class "alt-txt-col"
-    , class "small-text"
-    ]
 
 
-sessionstateView : Model -> List (Html Msg)
-sessionstateView m =
-    case m.sessionState of
-        Fresh name ->
-            [ p
-                sessionStateText
-                [ text "You are logged in as " ]
-            , b sessionStateText [ text name ]
-            , text "."
-            , logoutTrigger m
-            ]
 
-        Stale ->
-            [ p
-                [ class "alt-txt-col"
-                , class "small-text"
-                ]
-                [ text "Your session has expired. You need to "
-                , a [ onClick NeedsCreds ] [ text "log in" ]
-                , text " again."
-                ]
-            ]
 
-        None ->
-            [ p
-                [ class "alt-txt-col"
-                , class "small-text"
-                ]
-                [ text "You can browse publicly listed hosts and times anonymously. However, to claim a time you need to prove your identity by "
-                , a [ onClick NeedsCreds ] [ text "logging in" ]
-                , text "."
-                ]
-            ]
 
 
 
 -- hosts
 
 
-hostListingStyle : List (Attribute Msg)
-hostListingStyle =
-    [ class "pt-b-2em"
-    , class "light-bkg"
-    ]
 
 
-hostListing : Host -> Html Msg
-hostListing h =
-    div hostListingStyle
-        [ dl []
-            [ dt [] [ text "handle" ]
-            , dd [ class "hosthandle" ] [ text h.handle ]
-            , dt [] [ text "name" ]
-            , dd [ class "hostname" ] [ text h.name ]
-            ]
-        ]
 
 
-hostsDataView : Route -> HostsData -> List (Html Msg)
-hostsDataView r data =
-    [ div 
-        [ id "scrollArea", class "hostlist" ] 
-        (List.concatMap (hostsCall (getFilterParameter r) data.nextPage) (List.reverse data.calls)) ]
 
 
-hostsCall : (Maybe String) -> Int -> ApiCall (List Host)  -> List (Html Msg)
-hostsCall filter nextP call =
-    case call of
-        Uncalled -> 
-            [ div [ class "hostlistAction" ] 
-                [ button 
-                    [ onClick (FetchHosts filter (Just nextP))
-                    , class "centered"
-                    , class "light-button" ] 
-                    [ text "Load more..."] 
-                ] 
-            ]
 
-        Pending ->
-            [ div [ class "hostlistAction" ]
-                [ div 
-                    [ id "loading"
-                    , class "centered" ] 
-                    [] 
-                ] 
-            ]
-
-        Response hs ->
-            List.map hostListing hs
-
-        Error ms ->
-            [ div [ class "error"] 
-            [ i [ class "fas fa-exclamation-triangle" ] []
-            , h4 [] [ text "An error occured."] 
-            , p [] 
-                [ text "You can always "
-                , a [ onClick (FetchHosts Nothing (Just nextP)) ] [ text "try again."] ]
-            ] 
-            ]
 
 
 
 -- Header
 
 
-logoutTrigger : Model -> Html Msg
-logoutTrigger m =
-    Html.form
-        [ action (logoutUrl m)
-        , method "post"
-        , class "inline"
-        , class "logoutTrigger"
-        ]
-        [ button
-            [ type_ "submit"
-            ]
-            [ i [ class "fas", class "fa-sign-out-alt", class "alt-txt-col" ] [] ]
-        , input
-            [ type_ "hidden"
-            , name "__RequestVerificationToken"
-            , value m.csrf
-            ]
-            []
-        ]
 
 
-sessionControl : Model -> Html Msg
-sessionControl m =
-    case m.sessionState of
-        Fresh n ->
-            Html.nav [ class "sessionControl" ]
-                [ text (String.concat [ "Signed in: ", n, " ▼" ])
-                , ul []
-                    [ li [] [ logoutTrigger m ] ]
-                ]
 
-        _ ->
-            text ""
+-- sessionControl : Model -> Html Msg
+-- sessionControl m =
+--     case m.sessionState of
+--         Fresh n ->
+--             Html.nav [ class "sessionControl" ]
+--                 [ text (String.concat [ "Signed in: ", n, " ▼" ])
+--                 , ul []
+--                     [ li [] [ logoutTrigger m ] ]
+--                 ]
+
+--         _ ->
+--             text ""
 
 
 
@@ -862,17 +623,17 @@ sessionControl m =
 -- myBookings
 
 
-myBookings : Model -> Html Msg
-myBookings m =
-    if isSignedIn m.sessionState then
-        bookingsCount m
+-- myBookings : Model -> Html Msg
+-- myBookings m =
+--     if isSignedIn m.sessionState then
+--         bookingsCount m
 
-    else
-        a
-            [ onClick <| NeedsCreds
-            , class "login-to-book"
-            ]
-            [ text "Sign in" ]
+--     else
+--         a
+--             [ onClick <| NeedsCreds
+--             , class "login-to-book"
+--             ]
+--             [ text "Sign in" ]
 
 
 mybookingsUrl : String
@@ -911,50 +672,50 @@ bookigCountView m =
 
 
 
-content : Model -> List (Html Msg)
-content m =
-    case m.route of
-        HomeRoute _ ->
-            []
+-- content : Model -> List (Html Msg)
+-- content m =
+--     case m.route of
+--         HomeRoute _ ->
+--             []
 
-        HostsRoute _ ->
-            []
+--         HostsRoute _ ->
+--             []
 
-        ScheduleRoute _ _ ->
-            weekPointerView m.route m.focus :: times m
+--         ScheduleRoute _ _ ->
+--             weekPointerView m.route m.focus :: times m
 
-        BookingsRoute ->
-            myBookingsListing m
+--         BookingsRoute ->
+--             myBookingsListing m
 
-        NotFound ->
-            []
+--         NotFound ->
+--             []
 
 
 
 -- myBookings
 
 
-myBookingsListing : Model -> List (Html Msg)
-myBookingsListing m =
-    [ h2 [] [ text "My bookings" ]
-    , bookingsView m
-    ]
+-- myBookingsListing : Model -> List (Html Msg)
+-- myBookingsListing m =
+--     [ h2 [] [ text "My bookings" ]
+--     , bookingsView m
+--     ]
 
 
-bookingsView : Model -> Html Msg
-bookingsView m =
-    case ( isSignedIn m.sessionState, m.bookingsCall ) of
-        ( True, Response ts ) ->
-            ul [] <|
-                List.map
-                    (bookingView m.sessionState m.unbookCallHistory)
-                    ts
+-- bookingsView : Model -> Html Msg
+-- bookingsView m =
+--     case ( isSignedIn m.sessionState, m.bookingsCall ) of
+--         ( True, Response ts ) ->
+--             ul [] <|
+--                 List.map
+--                     (bookingView m.sessionState m.unbookCallHistory)
+--                     ts
 
-        ( False, _ ) ->
-            p [] [ text "Your session has become stale. You need to sign in again." ]
+--         ( False, _ ) ->
+--             p [] [ text "Your session has become stale. You need to sign in again." ]
 
-        _ ->
-            text ""
+--         _ ->
+--             text ""
 
 
 unBookBtn : Int -> Html Msg
@@ -962,36 +723,36 @@ unBookBtn start =
     button [ onClick (Unbook start) ] [ text "UnBook" ]
 
 
-bookingView : SessionState -> UnbookCommandHistory -> Appointment -> Html Msg
-bookingView s history appt =
-    li [ class "meetitem" ]
-        [ dl [ class "meetdata" ]
-            [ dt [] [ text "name" ]
-            , dd [] [ text appt.hostRef ]
-            , dt [] [ text "start" ]
-            , dd [] [ text (Maybe.withDefault "" appt.oclock) ]
-            , dt [] [ text "duration" ]
-            , dd [] [ text (duration appt.dur) ]
-            ]
-        , case ( isSignedIn s, Dict.get appt.start history ) of
-            ( False, _ ) ->
-                text ""
+-- bookingView : SessionState -> UnbookCommandHistory -> Appointment -> Html Msg
+-- bookingView s history appt =
+--     li [ class "meetitem" ]
+--         [ dl [ class "meetdata" ]
+--             [ dt [] [ text "name" ]
+--             , dd [] [ text appt.hostRef ]
+--             , dt [] [ text "start" ]
+--             , dd [] [ text (Maybe.withDefault "" appt.oclock) ]
+--             , dt [] [ text "duration" ]
+--             , dd [] [ text (duration appt.dur) ]
+--             ]
+--         , case ( isSignedIn s, Dict.get appt.start history ) of
+--             ( False, _ ) ->
+--                 text ""
 
-            ( _, Just Pending ) ->
-                button [ class "ofinterest" ] [ text "" ]
+--             ( _, Just Pending ) ->
+--                 button [ class "ofinterest" ] [ text "" ]
 
-            ( _, Just (Response _) ) ->
-                button [ class "ofinterest" ] [ text "Unbooked." ]
+--             ( _, Just (Response _) ) ->
+--                 button [ class "ofinterest" ] [ text "Unbooked." ]
 
-            ( _, Just (Error msg) ) ->
-                button [ class "ofinterest" ] [ text msg ]
+--             ( _, Just (Error msg) ) ->
+--                 button [ class "ofinterest" ] [ text msg ]
 
-            ( _, Nothing ) ->
-                button [ onClick (Unbook appt.start) ] [ text "Unbook" ]
+--             ( _, Nothing ) ->
+--                 button [ onClick (Unbook appt.start) ] [ text "Unbook" ]
 
-            _ ->
-                text ""
-        ]
+--             _ ->
+--                 text ""
+--         ]
 
 
 
@@ -1035,63 +796,63 @@ weekPointerView r { prev, curr, next, window } =
 -- Times
 
 
-times : Model -> List (Html Msg)
-times m =
-    case m.timesCall of
-        Uncalled ->
-            [ h2 [] [ text "no host selected" ] ]
+-- times : Model -> List (Html Msg)
+-- times m =
+--     case m.timesCall of
+--         Uncalled ->
+--             [ h2 [] [ text "no host selected" ] ]
 
-        Pending ->
-            [ h2 [] [ text "..." ] ]
+--         Pending ->
+--             [ h2 [] [ text "..." ] ]
 
-        Response s ->
-            appointmentListView s m
+--         Response s ->
+--             appointmentListView s m
 
-        Error e ->
-            [ h2 [] [ text e ] ]
-
-
-appointmentListView : List Appointment -> Model -> List (Html Msg)
-appointmentListView ts m =
-    case m.route of
-        ScheduleRoute _ _ ->
-            [ ul [] (List.map (appointmentView m.sessionState m.bookCallHistory) ts)
-            ]
-
-        _ ->
-            [ p [] [ text "No timezone." ] ]
+--         Error e ->
+--             [ h2 [] [ text e ] ]
 
 
-appointmentView : SessionState -> BookCommandHistory -> Appointment -> Html Msg
-appointmentView s history appt =
-    li [ class "meetitem" ]
-        [ dl [ class "meetdata" ]
-            [ dt [] [ text "name" ]
-            , dd [] [ text appt.hostRef ]
-            , dt [] [ text "start" ]
-            , dd [] [ text (Maybe.withDefault "" appt.oclock) ]
-            , dt [] [ text "duration" ]
-            , dd [] [ text (duration appt.dur) ]
-            ]
-        , case ( isSignedIn s, Dict.get appt.start history ) of
-            ( False, _ ) ->
-                button [ onClick NeedsCreds ] [ text "Sign in to book." ]
+-- appointmentListView : List Appointment -> Model -> List (Html Msg)
+-- appointmentListView ts m =
+--     case m.route of
+--         ScheduleRoute _ _ ->
+--             [ ul [] (List.map (appointmentView m.sessionState m.bookCallHistory) ts)
+--             ]
 
-            ( _, Just Pending ) ->
-                button [ class "ofinterest" ] [ text "" ]
+--         _ ->
+--             [ p [] [ text "No timezone." ] ]
 
-            ( _, Just (Response _) ) ->
-                button [ class "ofinterest" ] [ text "Booked." ]
 
-            ( _, Just (Error msg) ) ->
-                button [ class "ofinterest" ] [ text msg ]
+-- appointmentView : SessionState -> BookCommandHistory -> Appointment -> Html Msg
+-- appointmentView s history appt =
+--     li [ class "meetitem" ]
+--         [ dl [ class "meetdata" ]
+--             [ dt [] [ text "name" ]
+--             , dd [] [ text appt.hostRef ]
+--             , dt [] [ text "start" ]
+--             , dd [] [ text (Maybe.withDefault "" appt.oclock) ]
+--             , dt [] [ text "duration" ]
+--             , dd [] [ text (duration appt.dur) ]
+--             ]
+--         , case ( isSignedIn s, Dict.get appt.start history ) of
+--             ( False, _ ) ->
+--                 button [ onClick NeedsCreds ] [ text "Sign in to book." ]
 
-            ( _, Nothing ) ->
-                button [ onClick (Book appt) ] [ text "Book" ]
+--             ( _, Just Pending ) ->
+--                 button [ class "ofinterest" ] [ text "" ]
 
-            _ ->
-                text ""
-        ]
+--             ( _, Just (Response _) ) ->
+--                 button [ class "ofinterest" ] [ text "Booked." ]
+
+--             ( _, Just (Error msg) ) ->
+--                 button [ class "ofinterest" ] [ text msg ]
+
+--             ( _, Nothing ) ->
+--                 button [ onClick (Book appt) ] [ text "Book" ]
+
+--             _ ->
+--                 text ""
+--         ]
 
 
 duration : Int -> String
