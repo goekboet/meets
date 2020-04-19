@@ -17,7 +17,7 @@ import Url
 import Url.Builder as UrlB
 import SessionState as Session exposing (SessionState, sessionstateView)
 import HostsListing as Hosts exposing (HostsData, receiveData)
-
+import HomeLink exposing (homelink, homeLinkStyle)
 
 
 -- Appointment
@@ -500,11 +500,7 @@ routeToView m =
             ]
 
 
-homeLinkStyle : List (Attribute Msg)
-homeLinkStyle =
-    [ class "pt-1em"
-    , class "heavy-bkg"
-    ]
+
 
 
 routeLinkStyle : List (Attribute Msg)
@@ -515,15 +511,7 @@ routeLinkStyle =
     ]
 
 
-homelink : List (Html Msg)
-homelink =
-    [ a
-        [ href "/"
-        , class "alt-txt-col"
-        , class "large-text"
-        ]
-        [ text "meets" ]
-    ]
+
 
 
 

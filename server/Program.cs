@@ -43,6 +43,7 @@ namespace Meets
                     {
                         IdentityModelEventSource.ShowPII = true;
                         var key = context.Configuration["Serilog:Configuration"];
+                        configuration.ReadFrom.Configuration(context.Configuration);
                         SwitchLogger(key, configuration);
                     });
         });

@@ -1,10 +1,12 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using IdentityModel;
 using Meets.RefreshTokenHandling;
 using Meets.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -50,7 +52,7 @@ namespace Meets
             { 
                 x.Cookie.Name = "anticsrf";
             });
-
+            
             services.AddAuthentication(options =>
                 {
                     options.DefaultScheme = CookieScheme;
