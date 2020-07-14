@@ -1,0 +1,53 @@
+.hostsFilter {
+    display: flex;
+    align-items: baseline;
+}
+
+.hostsFilter label {
+    margin-right: 1em;
+}
+
+.hostsFilter input[type=text] {
+    border-bottom: dotted;
+    border-width: thin;
+    flex-grow: 1;
+}
+
+.hostsFilter button {
+    padding: 0.5em;
+    margin-left: 1em;
+    border-radius: 5px;
+    border: solid;
+    border-width: thin;
+}
+
+.hostsList {
+    display: flex;
+    flex-direction: column;
+    overflow-y: scroll;
+}
+
+.hostsList li {
+    display: flex;
+    align-items: baseline;
+    margin-top: 0.5em;
+}
+
+.hostsList li > label {
+    flex-grow: 1;
+    margin-left: 1em;
+}
+
+.hostsList li.hostsNextPage {
+    justify-content: center;
+    margin-bottom: 1em;
+}
+
+.hostsNextPage button {
+    font-weight: bold;
+}
+
+.hostsError label {
+    margin-left: 1em;
+    font-style: italic;
+}

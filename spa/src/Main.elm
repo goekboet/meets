@@ -9,6 +9,7 @@ import Html.Events exposing (onClick)
 import Html.Attributes as Attr exposing (class, href)
 import SessionState as SS
 import Page exposing (Page(..))
+import Hosts
 
 
 -- Appointment
@@ -16,16 +17,20 @@ import Page exposing (Page(..))
 type alias Flags =
   { antiCsrf: SS.AntiCsrfToken
   , username: Maybe SS.Username
+  , publicBrokerUrl : String
   }
 
 type alias Model =
   { key : Nav.Key
   , sessionState : SS.Model
   , page: Maybe Page
+  , hostsModel : Hosts.Model
   }
+
 type Msg
   = LinkClicked UrlRequest
   | UrlChanged Url
+  | HostsMessage Hosts.Msg
 
 -- MAIN
 
@@ -50,12 +55,16 @@ init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   let
       sessionState = SS.init flags.username (Just flags.antiCsrf)
+      page = Page.fromUrl url
   in
   ( { key = key
     , sessionState = sessionState
-    , page = Page.fromUrl url
+    , page = page
+    , hostsModel = Hosts.init flags.publicBrokerUrl
     }
-  , Cmd.none
+  , case page of
+    Just HostsPage -> Hosts.fetchHosts HostsMessage flags.publicBrokerUrl Nothing Nothing
+    _ -> Cmd.none
   )
 
 
@@ -82,6 +91,13 @@ update msg model =
             , Cmd.none
             )
 
+        HostsMessage hs -> 
+          let
+              (hModel, cs) = Hosts.update HostsMessage hs model.hostsModel
+          in
+          ( { model | hostsModel = hModel }, cs)
+         
+
 
 
 
@@ -101,7 +117,7 @@ homelink ss page =
           [ a
             [ Page.toUrl HomePage |> href
             ]
-            [ text "Publish" ]
+            [ text "Meets" ]
           ]
         , if SS.isSignedIn ss
           then SS.formLink ss (Maybe.withDefault HomePage page |> Page.logoutUrl ) FA.fas_fa_sign_out_alt
@@ -147,6 +163,17 @@ indexView m =
     then loggedIn
     else notLoggedIn
     
+pageView : Model -> List (Html Msg)
+pageView m =
+  case m.page of
+    Just HomePage -> indexView m
+    Just BookingsPage -> []
+    Just HostsPage -> Hosts.view HostsMessage m.hostsModel
+    Just (HostPage h) -> []
+    _ -> []
+
+
+
 
 view : Model -> Browser.Document Msg
 view model =
@@ -160,7 +187,7 @@ view model =
           , class "light" 
           , class "app-view" 
           ] 
-          (indexView model)
+          (pageView model)
         ] 
       ]
     }

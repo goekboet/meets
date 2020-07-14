@@ -7,13 +7,14 @@ module Page exposing
     )
 
 import Url exposing (Url)
-import Url.Parser as UrlP exposing (Parser)
+import Url.Parser as UrlP exposing (Parser, (</>))
 import Url.Builder as UrlB
 
 type Page
     = HomePage 
     | BookingsPage 
-    | HostsPage 
+    | HostsPage
+    | HostPage String 
 
 
 fromUrl : Url -> Maybe Page
@@ -25,6 +26,7 @@ route =
         [ UrlP.map HomePage UrlP.top 
         , UrlP.map BookingsPage (UrlP.s "bookings")
         , UrlP.map HostsPage (UrlP.s "hosts")
+        , UrlP.map HostPage (UrlP.s "hosts" </> UrlP.string)
         ]
 
 toUrl : Page -> String
@@ -33,6 +35,7 @@ toUrl r =
         HomePage -> UrlB.absolute [] [] 
         BookingsPage -> UrlB.absolute [ "bookings" ] []
         HostsPage -> UrlB.absolute [ "hosts" ] []
+        HostPage handle -> UrlB.absolute [ "hosts", handle ] []
             
 loginUrl : Page -> String
 loginUrl r =

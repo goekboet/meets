@@ -1,25 +1,19 @@
-FROM node:12 AS build-env
+FROM node:lts
 
-WORKDIR /home/elm
 RUN curl -L -o elm.gz https://github.com/elm/compiler/releases/download/0.19.1/binary-for-linux-64-bit.gz
 RUN gunzip elm.gz
 RUN chmod +x elm
 RUN mv elm /usr/local/bin
-RUN npm install browserify@16.5.0 -g
-RUN npm install uglify-js@3.6.1 -g
+RUN npm install -g uglify-js@3.10.0
+RUN npm install -g browserify@16.5.1
 
-WORKDIR /home/spa
+WORKDIR /home/meets_spa
 COPY package.json package-lock.json ./
-RUN npm install date-fns@2.4.1
+RUN npm install
 
 COPY . .
 RUN ./build.sh
 
-FROM ego/aspnet:3.1
-WORKDIR /home/meets_spa
-
-COPY --from=build-env /home/spa/dist ./build
-
-CMD cp ./build/* ./pub 
+CMD rm -r ./pub/* 2>/dev/null ; cp ./dist/* ./pub
 
 

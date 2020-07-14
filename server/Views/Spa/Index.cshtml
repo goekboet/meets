@@ -18,7 +18,7 @@
 
     string csrf() => $"'{Xsrf.GetAndStoreTokens(Context).RequestToken}'";
 
-    string baseUrl() => $"'{Broker.Value.UnAuthorized}'";
+    string baseUrl() => $"{Broker.Value.UnAuthorized}";
 }
 
 <!DOCTYPE HTML>
@@ -33,6 +33,7 @@
     src="~/index.js" 
     data-anticsrf="@Xsrf.GetAndStoreTokens(Context).RequestToken" 
     data-username="@user()"
+    data-publicbrokerurl="@baseUrl()"
     defer></script>
   <link rel="stylesheet" type="text/css" href="~/style.css">
   <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css">
