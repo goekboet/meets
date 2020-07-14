@@ -10,3 +10,4 @@ discovery.json
 **/main.min.js
 **/node_modules
 **/wwwroot/
+.fake
