@@ -1,0 +1,21 @@
+:root {
+  --heavy-color: steelblue;
+  --light-color: aliceblue;
+}
+
+
+input:focus, button:focus, a:focus {
+    outline-color: var(--heavy-color);
+  }
+
+.heavy {
+  background-color: var(--heavy-color);
+  color: var(--light-color);
+  border-color: var(--heavy-color);
+}
+
+.light {
+  background-color: var(--light-color);;
+  color: var(--heavy-color);
+  border-color: var(--heavy-color);
+}

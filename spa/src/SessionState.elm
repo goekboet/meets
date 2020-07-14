@@ -1,88 +1,74 @@
-module SessionState exposing (SessionState, init, recordStaleness, isSignedIn, sessionstateView)
+module SessionState exposing 
+    ( Username
+    , AntiCsrfToken
+    , Model
+    , init
+    , isSignedIn
+    , sessionEnded
+    , antiCsrfRefreshed
+    , formLink
+    )
 
-import Html exposing (Html, Attribute, p, i, input, text, b, button, a)
-import Route exposing (Route, logoutUrl)
-import Html.Attributes exposing (class, action, method, type_, name, value)
-import Html.Events exposing (onClick)
-import Model exposing (Msg(..))
+import Html exposing (Html, input, button)
+import Html.Attributes exposing (class, action, method, type_, name, value, disabled)
 
-type SessionState
-    = Fresh String
-    | Stale
-    | None
+type alias Username = String
 
-init : Maybe String -> SessionState
-init name = 
-    Maybe.map Fresh name
-    |> Maybe.withDefault None
+type alias AntiCsrfToken = String
 
-recordStaleness : SessionState
-recordStaleness = Stale
+type alias Model = 
+    { signedIn : Maybe Username
+    , antiCsrf : Maybe AntiCsrfToken
+    }
 
-isSignedIn : SessionState -> Bool
-isSignedIn s =
-    case s of
-        Fresh _ ->
-            True
+init : Maybe Username -> Maybe AntiCsrfToken -> Model
+init signIn antiCsrf =
+    { signedIn = signIn, antiCsrf = antiCsrf }
 
-        _ ->
-            False
-sessionStateText : List (Attribute Msg)
-sessionStateText =
-    [ class "alt-txt-col"
-    , class "small-text"
-    ]
+sessionEnded : Model
+sessionEnded = 
+    { signedIn = Nothing, antiCsrf = Nothing }
 
-logoutTrigger : Route -> String -> Html Msg
-logoutTrigger route csrf =
-    Html.form
-        [ action (logoutUrl route)
-        , method "post"
-        , class "inline"
-        , class "logoutTrigger"
-        ]
-        [ button
-            [ type_ "submit"
+antiCsrfRefreshed : Model -> String -> Model
+antiCsrfRefreshed m token =
+    { signedIn = m.signedIn, antiCsrf = Just token }
+
+
+isSignedIn : Model -> Bool
+isSignedIn m =
+    case m.signedIn of
+        Just _ -> True
+        _      -> False
+
+formLink : Model -> String -> Html msg -> Html msg
+formLink model url label =
+    case model.antiCsrf of
+    Just t -> 
+        Html.form
+            [ action url
+            , method "post"
+            , class "formlink"
             ]
-            [ i [ class "fas", class "fa-sign-out-alt", class "alt-txt-col" ] [] ]
-        , input
-            [ type_ "hidden"
-            , name "__RequestVerificationToken"
-            , value csrf
+            [ button
+                [ type_ "submit"
+                ]
+                [ label ]
+            , input
+                [ type_ "hidden"
+                , name "__RequestVerificationToken"
+                , value t
+                ]
+                []
             ]
-            []
-        ]
-
-sessionstateView : Route -> String -> SessionState -> List (Html Msg)
-sessionstateView r csrf s =
-    case s of
-        Fresh name ->
-            [ p
-                sessionStateText
-                [ text "You are logged in as " ]
-            , b sessionStateText [ text name ]
-            , text "."
-            , logoutTrigger r csrf
+    _ ->
+        Html.form
+            [ action url
+            , method "post"
+            , class "formlink"
             ]
-
-        Stale ->
-            [ p
-                [ class "alt-txt-col"
-                , class "small-text"
+            [ button
+                [ type_ "submit"
+                , disabled True
                 ]
-                [ text "Your session has expired. You need to "
-                , a [ onClick NeedsCreds ] [ text "log in" ]
-                , text " again."
-                ]
-            ]
-
-        None ->
-            [ p
-                [ class "alt-txt-col"
-                , class "small-text"
-                ]
-                [ text "You can browse publicly listed hosts and times anonymously. However, to claim a time you need to prove your identity by "
-                , a [ onClick NeedsCreds ] [ text "logging in" ]
-                , text "."
-                ]
+                [ label ]
             ]

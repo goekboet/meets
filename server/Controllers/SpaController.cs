@@ -29,7 +29,8 @@ namespace Meets.Controllers
                 Name = Name 
             });
 
-        [HttpGet("/login")]
+        [HttpPost("/login")]
+        [ValidateAntiForgeryToken]
         public IActionResult Login(string sparoute)
         {
             if (sparoute == null)

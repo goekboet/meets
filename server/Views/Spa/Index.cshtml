@@ -13,35 +13,30 @@
 
 @functions {
     string user() => Model.Name != null
-        ? $"'{Html.Encode(Model.Name)}'"
-        : "null";
+        ? $"{Html.Encode(Model.Name)}"
+        : "";
 
     string csrf() => $"'{Xsrf.GetAndStoreTokens(Context).RequestToken}'";
 
     string baseUrl() => $"'{Broker.Value.UnAuthorized}'";
 }
 
-<script>
-    let appstate = 
-        { 
-            name: @Html.Raw(user()),
-            csrf: @Html.Raw(csrf()),
-            focus: initWeekpointer(),
-            apiBaseUrl: @Html.Raw(baseUrl())
-        };
-
-    var app = Elm.Main.init({flags: appstate});
-    app.ports.getWeekpointer.subscribe(v => {
-        app.ports.gotWeekpointer.send(getWeekpointer(v));
-    })
-    app.ports.getTimesClock.subscribe(v => {
-        //console.log("times")
-        //console.log(v);
-        app.ports.gotTimesClock.send(printOclock(v));
-    })
-    app.ports.getBookingsClock.subscribe(v => {
-        //console.log("bookings")
-        //console.log(v);
-        app.ports.gotBookingsClock.send(printOclock(v));
-    })
-</script>
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meets</title>
+  <script src="~/app.js"></script>
+  <script 
+    id="entrypoint" 
+    src="~/index.js" 
+    data-anticsrf="@Xsrf.GetAndStoreTokens(Context).RequestToken" 
+    data-username="@user()"
+    defer></script>
+  <link rel="stylesheet" type="text/css" href="~/style.css">
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css">
+</head>
+<body>
+</body>
+</html>

@@ -1,0 +1,40 @@
+.home {
+    display: flex;
+    align-items: baseline;
+}
+
+.home > h1 {
+    flex-grow: 1;
+}
+
+.home > form > button > i {
+    font-size: 2em;
+}
+
+.indexLink {
+    display: flex;
+    flex-direction: column;
+}
+
+.indexLink a {
+    font-weight: normal;
+    margin-bottom: 1em;
+    border: solid;
+    border-width: thin;
+    border-radius: 5px;
+    padding: 0.5em;
+}
+
+.indexLink p {
+    margin:0;
+}
+
+.indexLink h3 {
+    margin-bottom: 1em;
+}
+
+a.homeNotLoggedIn {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
