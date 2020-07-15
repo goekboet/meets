@@ -79,7 +79,7 @@ namespace Meets.Services
             HttpClient c
         )
         {
-            c.BaseAddress = new Uri(opts.Value.Authorized);
+            c.BaseAddress = new Uri(opts.Value.UnAuthorized);
             c.DefaultRequestHeaders.Accept.Add(
                     new MediaTypeWithQualityHeaderValue("application/json"));
 

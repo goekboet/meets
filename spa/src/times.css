@@ -24,3 +24,28 @@
 .timesWeekpointer button {
     margin-right: 1em;
 }
+
+.timesList {
+    display: flex;
+    flex-direction: column;
+    overflow-y: scroll;
+}
+
+.timesList li {
+    display: flex;
+    align-items: baseline;
+    margin-top: 0.5em;
+}
+
+.timesList li > label {
+    flex-grow: 1;
+    margin-left: 1em;
+}
+
+.timesList button {
+    font-weight: bold;
+}
+
+.timesList button:disabled {
+    opacity: 0.5;
+}

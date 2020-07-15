@@ -194,9 +194,6 @@ pageView m =
     Just (TimesPage h) -> Times.view HostMessage h (TimesPage h |> signinLink) (SS.isSignedIn m.sessionState) m.timesModel
     _ -> []
 
-
-
-
 view : Model -> Browser.Document Msg
 view model =
     { title = "meets - public client"

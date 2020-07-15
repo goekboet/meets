@@ -13,7 +13,8 @@ module FontAwesome exposing
     , fas_minus_circle
     , fas_fa_sync_alt_rolls
     , fas_fa_sync_alt
-    , fas_fa_exclamation_circle)
+    , fas_fa_exclamation_circle
+    , far_fa_clock)
 
 import Html exposing (Html, i) 
 import Html.Events exposing ( onClick )
@@ -69,6 +70,10 @@ fas_fa_sync_alt_control syncing trigger =
 
 fas_fa_sync_alt_rolls : Html msg
 fas_fa_sync_alt_rolls = i [ class "fas fa-sync-alt rolls"] []
+
 fas_fa_sync_alt : Html msg
 fas_fa_sync_alt = i [ class "fas fa-sync-alt"] []
+
+far_fa_clock : Html msg
+far_fa_clock = i [ class "fas fa-clock"] []
   

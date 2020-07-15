@@ -7,6 +7,7 @@ import Html.Events as Event
 import Http exposing (Error)
 import Url.Builder as UrlB
 import Json.Decode as Json exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 
 type alias Time =
     { host : String
@@ -22,6 +23,15 @@ decodeTime =
     (Json.field "name" Json.string)
     (Json.field "start" Json.int)
     (Json.field "dur" Json.int)
+
+encodeTime : Time -> Value
+encodeTime { host, name, start, dur } =
+  Encode.object
+    [ ("host", Encode.string host)
+    , ("name", Encode.string name)
+    , ("start", Encode.int start)
+    , ("dur", Encode.int dur)
+    ]
 
 type alias Week = 
     { name : String
@@ -41,22 +51,47 @@ getWeekWindow { current, previous, next } =
 
 type Status 
     = Received
+    | Booked
     | Pending
     | Error
 
+type alias TimeItem = (Status, Time)
+
 type alias TimeData =
     { status : Status
-    , times : List Time
+    , times : List TimeItem
     }
 
 setPending : TimeData -> TimeData
 setPending td = { td | status = Pending }
 
 newTimes : List Time -> TimeData
-newTimes ts = { status = Received, times = ts }
+newTimes ts = { status = Received, times = List.map (Tuple.pair Received) ts }
 
 errorTimes : TimeData -> TimeData
 errorTimes td = { td | status = Error }
+
+
+
+updateStatus : Int -> Status -> TimeData -> TimeData
+updateStatus id status td =
+    let
+        f (s, t) = 
+            if t.start == id
+            then (status, t)
+            else (s, t)
+
+    in
+        { td | times = List.map f td.times }
+
+pendingBooking : Int -> TimeData -> TimeData
+pendingBooking id td = updateStatus id Pending td
+
+successfulBooking : Int -> TimeData -> TimeData   
+successfulBooking id td = updateStatus id Booked td
+
+failedBooking : Int -> TimeData -> TimeData
+failedBooking id td = updateStatus id Error td
 
 initData : TimeData
 initData = 
@@ -87,6 +122,8 @@ type Msg
     | TimesReceived (Result Error (List Time))
     | Move (Maybe Int)
     | New String Weekpointer
+    | Book Time
+    | BookReceived Int (Result Error ())
 
 fetchTimes : (Msg -> msg) -> String -> String -> Weekpointer -> Cmd msg
 fetchTimes toApp host baseUrl wp =
@@ -104,6 +141,17 @@ fetchTimes toApp host baseUrl wp =
             , expect = Http.expectJson (toApp << TimesReceived) (Json.list decodeTime)
             }
 
+book : (Msg -> msg) -> Time -> Cmd msg
+book toApp t =
+    let
+        url = UrlB.absolute [ "api", "bookings" ] []
+    in
+    Http.post
+    { url = url
+    , body = encodeTime t |> Http.jsonBody
+    , expect = Http.expectWhatever (toApp << BookReceived t.start)
+    }
+
 update : (Msg -> msg) -> Msg -> Model -> (Model, Cmd msg)
 update toApp msg model =
     case msg of
@@ -111,15 +159,32 @@ update toApp msg model =
         ( { model | data = setPending model.data}
         , fetchTimes toApp h model.baseUrl model.weekpointer)  
 
-      TimesReceived (Ok ts) -> ({ model | data = newTimes ts }, Cmd.none)  
+      TimesReceived (Ok ts) -> 
+        ( { model | data =  newTimes ts }
+        , Cmd.none)  
 
-      TimesReceived (Err e) -> ({ model | data = errorTimes model.data }, Cmd.none) 
+      TimesReceived (Err _) -> ({ model | data = errorTimes model.data }, Cmd.none) 
 
       Move ts -> ( model, moveWeekpointer ts)  
 
       New h wp ->
         ( { model | weekpointer = wp }
         , fetchTimes toApp h model.baseUrl wp
+        )
+
+      Book t ->
+        ( { model | data = pendingBooking t.start model.data }
+        , book toApp t
+        )
+
+      BookReceived id (Ok _) ->
+        ( { model | data = successfulBooking id model.data }
+        , Cmd.none
+        )
+
+      BookReceived id (Err _) ->
+        ( { model | data = failedBooking id model.data }
+        , Cmd.none
         )
 
 subscribe : (Msg -> msg) -> String -> Sub msg 
@@ -166,7 +231,51 @@ weekPointerControls toMsg h { current, previous, next } =
         [ FA.fas_fa_arrow_alt_circle_right ]
       , Html.label [] [ Html.text current.name ]
       ]
-    
+
+timesList : (Msg -> msg) -> Model -> Html msg    
+timesList toApp m =
+    let
+        listItem (s, t) =
+            case s of
+            Received -> 
+                Html.li [] 
+                [ FA.far_fa_clock
+                , Html.label [] [ Html.text t.name ]
+                , Html.button 
+                  [ Event.onClick (Book t |> toApp) 
+                  , Attr.disabled (not m.loggedIn) ] 
+                  [ Html.text "book" ]
+                ]
+
+            Booked -> 
+                Html.li [] 
+                    [ FA.fas_fa_check_circle
+                    , Html.label [] [ Html.text t.name ]
+                    , Html.button 
+                      [ ] 
+                      [ Html.text "go to bookings" ]
+                    ]
+
+            Pending -> 
+                Html.li [] 
+                    [ FA.fas_fa_sync_alt_rolls
+                    , Html.label [] [ Html.text t.name ]
+                    , Html.button 
+                      [ Attr.disabled True ] 
+                      [ Html.text "book" ]
+                    ]
+
+            Error -> 
+                Html.li [] 
+                    [ FA.fas_fa_exclamation_circle
+                    , Html.label [] [ Html.text ("Error booking time " ++ t.name ++ ".") ]
+                    , Html.button 
+                      [ Event.onClick (Book t |> toApp)] 
+                      [ Html.text "book" ]
+                    ]
+            
+    in
+        List.map listItem m.data.times |> Html.ul [ Attr.class "timesList"]
 
 view : (Msg -> msg) -> String -> Html msg -> Bool -> Model -> List (Html msg)
 view toApp host signInLink isSignedIn m =
@@ -176,4 +285,6 @@ view toApp host signInLink isSignedIn m =
     , weekPointerControls toApp host m.weekpointer
     , singInReminder signInLink isSignedIn
     , refreshTimes toApp host
+    , Html.hr [ Attr.class "line" ] []
+    , timesList toApp m
     ]
