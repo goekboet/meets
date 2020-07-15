@@ -11,6 +11,8 @@ import SessionState as SS
 import Page exposing (Page(..))
 import Hosts
 import Times
+import Bookings
+import Weekpointer exposing (Weekpointer)
 
 
 -- Appointment
@@ -19,7 +21,7 @@ type alias Flags =
   { antiCsrf: SS.AntiCsrfToken
   , username: Maybe SS.Username
   , publicBrokerUrl : String
-  , weekpointer : Times.Weekpointer
+  , weekpointer : Weekpointer
   }
 
 type alias Model =
@@ -28,13 +30,15 @@ type alias Model =
   , page: Maybe Page
   , hostsModel : Hosts.Model
   , timesModel : Times.Model
+  , bookingsModel : Bookings.Model
   }
 
 type Msg
   = LinkClicked UrlRequest
   | UrlChanged Url
   | HostsMessage Hosts.Msg
-  | HostMessage Times.Msg
+  | TimesMessage Times.Msg
+  | BookingsMessage Bookings.Msg
 
 -- MAIN
 
@@ -59,17 +63,20 @@ init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   let
       session = SS.init flags.username (Just flags.antiCsrf)
+      signedIn = SS.isSignedIn session
       page = Page.fromUrl url
   in
   ( { key = key
     , sessionState = session
     , page = page
     , hostsModel = Hosts.init flags.publicBrokerUrl
-    , timesModel = Times.init (SS.isSignedIn session) flags.publicBrokerUrl flags.weekpointer
+    , timesModel = Times.init signedIn flags.publicBrokerUrl flags.weekpointer
+    , bookingsModel = Bookings.init
     }
-  , case page of
-    Just HostsPage -> Hosts.fetchHosts HostsMessage flags.publicBrokerUrl Nothing Nothing
-    Just (TimesPage h) -> Times.fetchTimes HostMessage h flags.publicBrokerUrl flags.weekpointer  
+  , case (signedIn, page) of
+    (_, Just HostsPage) -> Hosts.fetchHosts HostsMessage flags.publicBrokerUrl Nothing Nothing
+    (_, Just (TimesPage h)) -> Times.fetchTimes TimesMessage h flags.publicBrokerUrl flags.weekpointer  
+    (True, Just BookingsPage) -> Bookings.listBookings BookingsMessage
     _ -> Cmd.none
   )
 
@@ -93,11 +100,14 @@ update msg model =
           let
             nRoute = Page.fromUrl url
             publicUrl = model.hostsModel.publicApiBaseUrl
+
+            isLoggedIn = SS.isSignedIn model.sessionState
           in
             ( { model | page = nRoute }
-            , case nRoute of
-              Just HostsPage -> Hosts.fetchHosts HostsMessage publicUrl Nothing Nothing
-              Just (TimesPage h) -> Times.fetchTimes HostMessage h publicUrl model.timesModel.weekpointer  
+            , case (isLoggedIn, nRoute) of
+              (_, Just HostsPage) -> Hosts.fetchHosts HostsMessage publicUrl Nothing Nothing
+              (_, Just (TimesPage h)) -> Times.fetchTimes TimesMessage h publicUrl model.timesModel.weekpointer  
+              (True, Just BookingsPage) -> Bookings.listBookings BookingsMessage
               _ -> Cmd.none
             )
 
@@ -107,11 +117,17 @@ update msg model =
           in
           ( { model | hostsModel = hModel }, cs)
 
-        HostMessage hs ->
+        TimesMessage hs ->
           let
-              (hModel, cs) = Times.update HostMessage hs model.timesModel
+              (hModel, cs) = Times.update TimesMessage hs model.timesModel
           in
           ( { model | timesModel = hModel }, cs)
+
+        BookingsMessage hs ->
+          let
+              (hModel, cs) = Bookings.update BookingsMessage hs model.bookingsModel
+          in
+          ( { model | bookingsModel = hModel }, cs)
          
 
 -- SUBSCRIPTIONS
@@ -121,9 +137,9 @@ subscriptions : Model -> Sub Msg
 subscriptions m = 
   case m.page of
      Just HomePage      -> Sub.none
-     Just BookingsPage  -> Sub.none
+     Just BookingsPage  -> Bookings.subscribe BookingsMessage
      Just HostsPage     -> Sub.none
-     Just (TimesPage h) -> Times.subscribe HostMessage h
+     Just (TimesPage h) -> Times.subscribe TimesMessage h
      _                  -> Sub.none
 
 homelink : SS.Model -> Maybe Page -> Html msg
@@ -171,7 +187,7 @@ indexView m =
             [ Html.h3 [] [ text "Hosts" ]
             , Html.p [] [ text "List and search hosts that publish times with us." ]
             ]
-          , a [ ]
+          , a [ BookingsPage |> Page.toUrl |> href ]
               [ Html.h3 [] [ text "Bookings" ]
               , p [] [ text "Any bookings you made shows up here." ]
               ]
@@ -181,17 +197,27 @@ indexView m =
     if SS.isSignedIn m.sessionState
     then loggedIn
     else notLoggedIn
-    
+
+loginRequired : Model -> List (Html Msg)    
+loginRequired m =
+  [ Html.h2 [] [ Html.text "Login required"]
+  , Html.p [] 
+    [ Html.text "This page requires you to "
+    , SS.formLink m.sessionState (Page.loginUrl HomePage) (Html.text "login") 
+    , Html.text " in order to do anything useful."
+    ]
+  ]
 pageView : Model -> List (Html Msg)
 pageView m =
   let
     signinLink p = SS.formLink m.sessionState (Page.loginUrl p) (Html.text "login")     
   in
-  case m.page of
-    Just HomePage -> indexView m
-    Just BookingsPage -> []
-    Just HostsPage -> Hosts.view HostsMessage m.hostsModel
-    Just (TimesPage h) -> Times.view HostMessage h (TimesPage h |> signinLink) (SS.isSignedIn m.sessionState) m.timesModel
+  case (SS.isSignedIn m.sessionState, m.page) of
+    (_,Just HomePage) -> indexView m
+    (False,Just BookingsPage) -> loginRequired m
+    (True, Just BookingsPage) -> Bookings.view BookingsMessage m.bookingsModel
+    (_,Just HostsPage) -> Hosts.view HostsMessage m.hostsModel
+    (s,Just (TimesPage h)) -> Times.view TimesMessage h (TimesPage h |> signinLink) s m.timesModel
     _ -> []
 
 view : Model -> Browser.Document Msg

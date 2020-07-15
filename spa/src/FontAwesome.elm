@@ -14,7 +14,9 @@ module FontAwesome exposing
     , fas_fa_sync_alt_rolls
     , fas_fa_sync_alt
     , fas_fa_exclamation_circle
-    , far_fa_clock)
+    , far_fa_clock
+    , far_fa_calendar_check
+    , far_fa_calendar_times)
 
 import Html exposing (Html, i) 
 import Html.Events exposing ( onClick )
@@ -76,4 +78,10 @@ fas_fa_sync_alt = i [ class "fas fa-sync-alt"] []
 
 far_fa_clock : Html msg
 far_fa_clock = i [ class "fas fa-clock"] []
+
+far_fa_calendar_check : Html msg
+far_fa_calendar_check = i [ class "fas fa-calendar-check"] []
+
+far_fa_calendar_times : Html msg
+far_fa_calendar_times = i [ class "fas fa-calendar-times"] []
   

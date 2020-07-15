@@ -1,4 +1,4 @@
-port module Times exposing (Model, Weekpointer, Msg, init, update, subscribe, view, fetchTimes)
+module Times exposing (Model, Msg, init, update, subscribe, view, fetchTimes)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
@@ -8,6 +8,9 @@ import Http exposing (Error)
 import Url.Builder as UrlB
 import Json.Decode as Json exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import Weekpointer as WP exposing (Weekpointer)
+import Page
+
 
 type alias Time =
     { host : String
@@ -32,22 +35,6 @@ encodeTime { host, name, start, dur } =
     , ("start", Encode.int start)
     , ("dur", Encode.int dur)
     ]
-
-type alias Week = 
-    { name : String
-    , ts: Int
-    , isNow : Bool
-    }
-
-type alias Weekpointer =
-    { current: Week
-    , previous: Week
-    , next : Week
-    }
-
-getWeekWindow : Weekpointer -> (Int, Int)
-getWeekWindow { current, previous, next } =
-    (current.ts, next.ts)
 
 type Status 
     = Received
@@ -114,9 +101,6 @@ init l url wp =
     , weekpointer = wp
     }
 
-port moveWeekpointer : Maybe Int -> Cmd msg
-port newWeekpointer : (Weekpointer -> msg) -> Sub msg
-
 type Msg 
     = RefreshTimes String
     | TimesReceived (Result Error (List Time))
@@ -128,7 +112,7 @@ type Msg
 fetchTimes : (Msg -> msg) -> String -> String -> Weekpointer -> Cmd msg
 fetchTimes toApp host baseUrl wp =
     let
-        (from, to) = getWeekWindow wp
+        (from, to) = WP.getWeekWindow wp
         url = 
             UrlB.crossOrigin baseUrl
             [ "hosts", host, "times" ]
@@ -165,7 +149,7 @@ update toApp msg model =
 
       TimesReceived (Err _) -> ({ model | data = errorTimes model.data }, Cmd.none) 
 
-      Move ts -> ( model, moveWeekpointer ts)  
+      Move ts -> ( model, WP.moveWeekpointer ts)  
 
       New h wp ->
         ( { model | weekpointer = wp }
@@ -189,7 +173,7 @@ update toApp msg model =
 
 subscribe : (Msg -> msg) -> String -> Sub msg 
 subscribe toAppmsg host =
-    newWeekpointer (toAppmsg << New host)
+    WP.newWeekpointer (toAppmsg << New host)
 
 singInReminder : Html msg -> Bool -> Html msg
 singInReminder signInLink signedIn =
@@ -251,8 +235,8 @@ timesList toApp m =
                 Html.li [] 
                     [ FA.fas_fa_check_circle
                     , Html.label [] [ Html.text t.name ]
-                    , Html.button 
-                      [ ] 
+                    , Html.a
+                      [ Attr.href (Page.BookingsPage |> Page.toUrl )]
                       [ Html.text "go to bookings" ]
                     ]
 

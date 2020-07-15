@@ -1,0 +1,51 @@
+.bookingsWeekpointer {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 1em;
+}
+
+.bookingsWeekpointer button {
+    margin-right: 1em;
+}
+
+.bookingsRefresh {
+    display: flex;
+    align-items: baseline;
+}
+
+.bookingsRefresh > label {
+    flex-grow: 1;
+}
+
+.bookingsRefresh > button {
+    padding: 0.5em;
+    margin-left: 1em;
+    border-radius: 5px;
+    border: solid;
+    border-width: thin;
+}
+
+.bookingsList {
+    display: flex;
+    flex-direction: column;
+    overflow-y: scroll;
+}
+
+.bookingsList li {
+    display: flex;
+    align-items: baseline;
+    margin-top: 0.5em;
+}
+
+.bookingsList li > label {
+    flex-grow: 1;
+    margin-left: 1em;
+}
+
+.bookingsList button {
+    font-weight: bold;
+}
+
+.bookingsList button:disabled {
+    opacity: 0.5;
+}

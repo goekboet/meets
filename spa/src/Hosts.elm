@@ -8,7 +8,6 @@ import Http exposing (Error)
 import Html.Events as Event
 import Url.Builder as UrlB
 import Json.Decode as Json exposing ( Decoder )
-import Array exposing (map)
 
 type alias Host =
     { name : String
