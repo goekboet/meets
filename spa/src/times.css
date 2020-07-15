@@ -14,3 +14,13 @@
     border: solid;
     border-width: thin;
 }
+
+.timesWeekpointer {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 1em;
+}
+
+.timesWeekpointer button {
+    margin-right: 1em;
+}

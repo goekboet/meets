@@ -19,6 +19,7 @@ type alias Flags =
   { antiCsrf: SS.AntiCsrfToken
   , username: Maybe SS.Username
   , publicBrokerUrl : String
+  , weekpointer : Times.Weekpointer
   }
 
 type alias Model =
@@ -26,7 +27,7 @@ type alias Model =
   , sessionState : SS.Model
   , page: Maybe Page
   , hostsModel : Hosts.Model
-  , hostModel : Times.Model
+  , timesModel : Times.Model
   }
 
 type Msg
@@ -64,10 +65,11 @@ init flags url key =
     , sessionState = session
     , page = page
     , hostsModel = Hosts.init flags.publicBrokerUrl
-    , hostModel = Times.init (SS.isSignedIn session) flags.publicBrokerUrl}
+    , timesModel = Times.init (SS.isSignedIn session) flags.publicBrokerUrl flags.weekpointer
+    }
   , case page of
     Just HostsPage -> Hosts.fetchHosts HostsMessage flags.publicBrokerUrl Nothing Nothing
-    Just (TimesPage h) -> Times.fetchTimes HostMessage h flags.publicBrokerUrl 0 0  
+    Just (TimesPage h) -> Times.fetchTimes HostMessage h flags.publicBrokerUrl flags.weekpointer  
     _ -> Cmd.none
   )
 
@@ -95,7 +97,7 @@ update msg model =
             ( { model | page = nRoute }
             , case nRoute of
               Just HostsPage -> Hosts.fetchHosts HostsMessage publicUrl Nothing Nothing
-              Just (TimesPage h) -> Times.fetchTimes HostMessage h publicUrl 0 0  
+              Just (TimesPage h) -> Times.fetchTimes HostMessage h publicUrl model.timesModel.weekpointer  
               _ -> Cmd.none
             )
 
@@ -107,19 +109,22 @@ update msg model =
 
         HostMessage hs ->
           let
-              (hModel, cs) = Times.update HostMessage hs model.hostModel
+              (hModel, cs) = Times.update HostMessage hs model.timesModel
           in
-          ( { model | hostModel = hModel }, cs)
+          ( { model | timesModel = hModel }, cs)
          
-
-
-
 
 -- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ = Sub.none
+subscriptions m = 
+  case m.page of
+     Just HomePage      -> Sub.none
+     Just BookingsPage  -> Sub.none
+     Just HostsPage     -> Sub.none
+     Just (TimesPage h) -> Times.subscribe HostMessage h
+     _                  -> Sub.none
 
 homelink : SS.Model -> Maybe Page -> Html msg
 homelink ss page =
@@ -186,7 +191,7 @@ pageView m =
     Just HomePage -> indexView m
     Just BookingsPage -> []
     Just HostsPage -> Hosts.view HostsMessage m.hostsModel
-    Just (TimesPage h) -> Times.view HostMessage h (TimesPage h |> signinLink) (SS.isSignedIn m.sessionState) m.hostModel
+    Just (TimesPage h) -> Times.view HostMessage h (TimesPage h |> signinLink) (SS.isSignedIn m.sessionState) m.timesModel
     _ -> []
 
 

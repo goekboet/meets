@@ -1,4 +1,4 @@
-module Times exposing (Model, Msg, init, update, view, fetchTimes)
+port module Times exposing (Model, Weekpointer, Msg, init, update, subscribe, view, fetchTimes)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
@@ -22,6 +22,22 @@ decodeTime =
     (Json.field "name" Json.string)
     (Json.field "start" Json.int)
     (Json.field "dur" Json.int)
+
+type alias Week = 
+    { name : String
+    , ts: Int
+    , isNow : Bool
+    }
+
+type alias Weekpointer =
+    { current: Week
+    , previous: Week
+    , next : Week
+    }
+
+getWeekWindow : Weekpointer -> (Int, Int)
+getWeekWindow { current, previous, next } =
+    (current.ts, next.ts)
 
 type Status 
     = Received
@@ -52,22 +68,30 @@ type alias Model =
     { baseUrl : String
     , loggedIn : Bool
     , data : TimeData
+    , weekpointer : Weekpointer
     }
 
-init : Bool -> String -> Model
-init l url =
+init : Bool -> String -> Weekpointer -> Model
+init l url wp =
     { baseUrl = url
     , loggedIn = l
     , data = initData
+    , weekpointer = wp
     }
+
+port moveWeekpointer : Maybe Int -> Cmd msg
+port newWeekpointer : (Weekpointer -> msg) -> Sub msg
 
 type Msg 
     = RefreshTimes String
     | TimesReceived (Result Error (List Time))
+    | Move (Maybe Int)
+    | New String Weekpointer
 
-fetchTimes : (Msg -> msg) -> String -> String -> Int -> Int -> Cmd msg
-fetchTimes toApp host baseUrl from to =
+fetchTimes : (Msg -> msg) -> String -> String -> Weekpointer -> Cmd msg
+fetchTimes toApp host baseUrl wp =
     let
+        (from, to) = getWeekWindow wp
         url = 
             UrlB.crossOrigin baseUrl
             [ "hosts", host, "times" ]
@@ -83,11 +107,24 @@ fetchTimes toApp host baseUrl from to =
 update : (Msg -> msg) -> Msg -> Model -> (Model, Cmd msg)
 update toApp msg model =
     case msg of
-       RefreshTimes h -> 
+      RefreshTimes h ->
         ( { model | data = setPending model.data}
-        , fetchTimes toApp model.baseUrl h 0 0)
-       TimesReceived (Ok ts) -> ({ model | data = newTimes ts }, Cmd.none)
-       TimesReceived (Err e) -> ({ model | data = errorTimes model.data }, Cmd.none)
+        , fetchTimes toApp h model.baseUrl model.weekpointer)  
+
+      TimesReceived (Ok ts) -> ({ model | data = newTimes ts }, Cmd.none)  
+
+      TimesReceived (Err e) -> ({ model | data = errorTimes model.data }, Cmd.none) 
+
+      Move ts -> ( model, moveWeekpointer ts)  
+
+      New h wp ->
+        ( { model | weekpointer = wp }
+        , fetchTimes toApp h model.baseUrl wp
+        )
+
+subscribe : (Msg -> msg) -> String -> Sub msg 
+subscribe toAppmsg host =
+    newWeekpointer (toAppmsg << New host)
 
 singInReminder : Html msg -> Bool -> Html msg
 singInReminder signInLink signedIn =
@@ -115,11 +152,28 @@ errorMessage td =
                 ]
        _     -> Html.text ""
 
+weekPointerControls : (Msg -> msg) -> String -> Weekpointer -> Html msg
+weekPointerControls toMsg h { current, previous, next } =
+    Html.span [ Attr.class "timesWeekpointer"]
+      [ Html.button 
+        [ Event.onClick (Move Nothing |> toMsg) ] 
+        [ FA.fas_fa_chevron_circle_down ]
+      , Html.button 
+        [ Event.onClick (Just previous.ts |> Move |> toMsg) ] 
+        [ FA.fas_fa_arrow_alt_circle_left ]
+      , Html.button 
+        [ Event.onClick (Just next.ts |> Move |> toMsg) ] 
+        [ FA.fas_fa_arrow_alt_circle_right ]
+      , Html.label [] [ Html.text current.name ]
+      ]
+    
+
 view : (Msg -> msg) -> String -> Html msg -> Bool -> Model -> List (Html msg)
 view toApp host signInLink isSignedIn m =
     [ Html.h2 [] [ Html.text "Times" ] 
     , errorMessage m.data 
     , Html.p [] [ Html.text "Browse times this host has published. Step between the current, previous and next weeks." ]
+    , weekPointerControls toApp host m.weekpointer
     , singInReminder signInLink isSignedIn
     , refreshTimes toApp host
     ]
