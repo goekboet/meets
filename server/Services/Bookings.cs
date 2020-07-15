@@ -18,17 +18,9 @@ namespace Meets.Services
             this IServiceCollection s,
             IConfiguration c)
         {
-            var section = c.GetSection("Broker");
+            var section = c.GetSection("BrokerClient");
             s.Configure<Broker>(section);
-            var o = section.Get<Broker>();
-            if (o.Mock)
-            {
-                s.AddHttpClient<IBookings, Mock>();
-            }
-            else
-            {
-                s.AddHttpClient<IBookings, Outbound>();
-            }
+            s.AddHttpClient<IBookings, Outbound>();
 
             return s;
         }
@@ -36,9 +28,8 @@ namespace Meets.Services
 
     public class Broker
     {
-        public bool Mock { get; set; }
-        public string Authorized { get; set; }
-        public string UnAuthorized { get; set; }
+        public string BackChannel { get;set;}
+        public string Cors { get;set;}
     }
 
     public class MockedHttpContent : HttpContent
@@ -79,7 +70,7 @@ namespace Meets.Services
             HttpClient c
         )
         {
-            c.BaseAddress = new Uri(opts.Value.UnAuthorized);
+            c.BaseAddress = new Uri(opts.Value.BackChannel);
             c.DefaultRequestHeaders.Accept.Add(
                     new MediaTypeWithQualityHeaderValue("application/json"));
 
