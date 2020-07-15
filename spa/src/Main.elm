@@ -10,6 +10,7 @@ import Html.Attributes as Attr exposing (class, href)
 import SessionState as SS
 import Page exposing (Page(..))
 import Hosts
+import Times
 
 
 -- Appointment
@@ -25,12 +26,14 @@ type alias Model =
   , sessionState : SS.Model
   , page: Maybe Page
   , hostsModel : Hosts.Model
+  , hostModel : Times.Model
   }
 
 type Msg
   = LinkClicked UrlRequest
   | UrlChanged Url
   | HostsMessage Hosts.Msg
+  | HostMessage Times.Msg
 
 -- MAIN
 
@@ -54,16 +57,17 @@ main =
 init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   let
-      sessionState = SS.init flags.username (Just flags.antiCsrf)
+      session = SS.init flags.username (Just flags.antiCsrf)
       page = Page.fromUrl url
   in
   ( { key = key
-    , sessionState = sessionState
+    , sessionState = session
     , page = page
     , hostsModel = Hosts.init flags.publicBrokerUrl
-    }
+    , hostModel = Times.init (SS.isSignedIn session) flags.publicBrokerUrl}
   , case page of
     Just HostsPage -> Hosts.fetchHosts HostsMessage flags.publicBrokerUrl Nothing Nothing
+    Just (TimesPage h) -> Times.fetchTimes HostMessage h flags.publicBrokerUrl 0 0  
     _ -> Cmd.none
   )
 
@@ -86,9 +90,13 @@ update msg model =
         UrlChanged url ->
           let
             nRoute = Page.fromUrl url
+            publicUrl = model.hostsModel.publicApiBaseUrl
           in
             ( { model | page = nRoute }
-            , Cmd.none
+            , case nRoute of
+              Just HostsPage -> Hosts.fetchHosts HostsMessage publicUrl Nothing Nothing
+              Just (TimesPage h) -> Times.fetchTimes HostMessage h publicUrl 0 0  
+              _ -> Cmd.none
             )
 
         HostsMessage hs -> 
@@ -96,6 +104,12 @@ update msg model =
               (hModel, cs) = Hosts.update HostsMessage hs model.hostsModel
           in
           ( { model | hostsModel = hModel }, cs)
+
+        HostMessage hs ->
+          let
+              (hModel, cs) = Times.update HostMessage hs model.hostModel
+          in
+          ( { model | hostModel = hModel }, cs)
          
 
 
@@ -165,11 +179,14 @@ indexView m =
     
 pageView : Model -> List (Html Msg)
 pageView m =
+  let
+    signinLink p = SS.formLink m.sessionState (Page.loginUrl p) (Html.text "login")     
+  in
   case m.page of
     Just HomePage -> indexView m
     Just BookingsPage -> []
     Just HostsPage -> Hosts.view HostsMessage m.hostsModel
-    Just (HostPage h) -> []
+    Just (TimesPage h) -> Times.view HostMessage h (TimesPage h |> signinLink) (SS.isSignedIn m.sessionState) m.hostModel
     _ -> []
 
 

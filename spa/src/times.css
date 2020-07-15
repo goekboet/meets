@@ -1,0 +1,16 @@
+.timesRefresh {
+    display: flex;
+    align-items: baseline;
+}
+
+.timesRefresh > label {
+    flex-grow: 1;
+}
+
+.timesRefresh > button {
+    padding: 0.5em;
+    margin-left: 1em;
+    border-radius: 5px;
+    border: solid;
+    border-width: thin;
+}

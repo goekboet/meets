@@ -159,7 +159,7 @@ hostView toApp hd =
             Html.li [] 
             [ FA.fas_fa_user_circle
             , Html.label [] [ Html.text h.name ]
-            , Html.a [ Page.toUrl (HostPage h.handle) |> Attr.href ] [ Html.text "times" ]]
+            , Html.a [ Page.toUrl (TimesPage h.handle) |> Attr.href ] [ Html.text "times" ]]
 
         nextLink =
             case hd.page of

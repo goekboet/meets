@@ -9,5 +9,5 @@ discovery.json
 **/main.js
 **/main.min.js
 **/node_modules
-**/wwwroot/
+**/wwwroot
 .fake

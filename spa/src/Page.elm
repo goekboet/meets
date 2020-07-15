@@ -14,7 +14,7 @@ type Page
     = HomePage 
     | BookingsPage 
     | HostsPage
-    | HostPage String 
+    | TimesPage String 
 
 
 fromUrl : Url -> Maybe Page
@@ -26,7 +26,7 @@ route =
         [ UrlP.map HomePage UrlP.top 
         , UrlP.map BookingsPage (UrlP.s "bookings")
         , UrlP.map HostsPage (UrlP.s "hosts")
-        , UrlP.map HostPage (UrlP.s "hosts" </> UrlP.string)
+        , UrlP.map TimesPage (UrlP.s "hosts" </> UrlP.string)
         ]
 
 toUrl : Page -> String
@@ -35,7 +35,7 @@ toUrl r =
         HomePage -> UrlB.absolute [] [] 
         BookingsPage -> UrlB.absolute [ "bookings" ] []
         HostsPage -> UrlB.absolute [ "hosts" ] []
-        HostPage handle -> UrlB.absolute [ "hosts", handle ] []
+        TimesPage handle -> UrlB.absolute [ "hosts", handle ] []
             
 loginUrl : Page -> String
 loginUrl r =
