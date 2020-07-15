@@ -44,6 +44,11 @@
 
 .timesList button {
     font-weight: bold;
+    margin-left: 1em;
+}
+
+.timesList a {
+    margin-left: 1em;
 }
 
 .timesList button:disabled {

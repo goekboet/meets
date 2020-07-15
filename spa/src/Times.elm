@@ -80,6 +80,9 @@ successfulBooking id td = updateStatus id Booked td
 failedBooking : Int -> TimeData -> TimeData
 failedBooking id td = updateStatus id Error td
 
+dismissItem : Int -> TimeData -> TimeData
+dismissItem id td = { td | times = List.filter (\(_, t) -> t.start /= id) td.times }
+
 initData : TimeData
 initData = 
     { status = Received
@@ -108,6 +111,7 @@ type Msg
     | New String Weekpointer
     | Book Time
     | BookReceived Int (Result Error ())
+    | Dismiss Int
 
 fetchTimes : (Msg -> msg) -> String -> String -> Weekpointer -> Cmd msg
 fetchTimes toApp host baseUrl wp =
@@ -170,6 +174,9 @@ update toApp msg model =
         ( { model | data = failedBooking id model.data }
         , Cmd.none
         )
+
+      Dismiss id -> 
+        ( { model | data = dismissItem id model.data}, Cmd.none )
 
 subscribe : (Msg -> msg) -> String -> Sub msg 
 subscribe toAppmsg host =
@@ -235,6 +242,9 @@ timesList toApp m =
                 Html.li [] 
                     [ FA.fas_fa_check_circle
                     , Html.label [] [ Html.text t.name ]
+                    , Html.button
+                      [ Dismiss t.start |> toApp |> Event.onClick ]
+                      [ Html.text "dismiss" ]
                     , Html.a
                       [ Attr.href (Page.BookingsPage |> Page.toUrl )]
                       [ Html.text "go to bookings" ]
@@ -253,9 +263,12 @@ timesList toApp m =
                 Html.li [] 
                     [ FA.fas_fa_exclamation_circle
                     , Html.label [] [ Html.text ("Error booking time " ++ t.name ++ ".") ]
+                    , Html.button
+                      [ Dismiss t.start |> toApp |> Event.onClick ]
+                      [ Html.text "dismiss"]
                     , Html.button 
                       [ Event.onClick (Book t |> toApp)] 
-                      [ Html.text "book" ]
+                      [ Html.text "retry" ]
                     ]
             
     in

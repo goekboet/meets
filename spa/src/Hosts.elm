@@ -32,6 +32,7 @@ type alias HostData =
     , filter : Maybe String
     }
 
+initHostData : HostData
 initHostData = 
     { status = Received
     , data = []
